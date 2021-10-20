@@ -1,58 +1,19 @@
 import std.stdio;
-import bindbc.glfw;
 import core.thread;
 import std.conv;
 
-import glfwloader = bindbc.loader.sharedlib;
-import bindbc.opengl;
-
-void loadBindBCGlfw() {
-    auto result = loadGLFW();
-    if(result != glfwSupport) {
-        foreach(info; glfwloader.errors) {
-            writeln("error: ", info.message);
-        }
-        throw new Exception("Cannot load glfw");
-    }
-}
-
-void loadBindBCOpenGL() {
-    auto result = loadOpenGL();
-    writeln(result);
-    if (result == GLSupport.gl21) {
-        writeln("yes .. .gl41 support is on");
-    }  else {
-        throw new Exception("need opengl 2.1 support");
-    }
-}
-
-extern (C) {
-    void staticKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) nothrow {
-        try {
-            writeln("key: ", key);
-        } catch (Throwable t) {
-        }
-    }
-}
+import sg;
+import window;
 
 void main(string[] args) {
-    loadBindBCGlfw();
-
-    glfwInit();
-    auto window = glfwCreateWindow(100, 100, "test", null, null);
-
-    glfwSetKeyCallback(window, &staticKeyCallback);
-    glfwMakeContextCurrent(window);
-    loadBindBCOpenGL();
-
-    writeln("OGLVendor:   ", glGetString(GL_VENDOR).to!string);
-    writeln("OGLRenderer: ", glGetString(GL_RENDERER).to!string);
-    writeln("OGLVersion:  ", glGetString(GL_VERSION).to!string);
-    writeln("OGLExt:      ", glGetString(GL_EXTENSIONS).to!string);
-    import sg;
     Root root = new Root("root");
-    Observer observer = new Observer("observer", args[1] == "parallel" ? new ParallelProjection() : new CameraProjection());
+    auto projection = args[1] == "parallel" ?
+        new ParallelProjection() :
+        new CameraProjection();
+    Observer observer = new Observer("observer", projection);
     TransformationNode rotation = new TransformationNode("rotation", new Transformation());
+
+    Window w = new Window(observer);
     Shape teapot = new Shape("cube");
     rotation.addChild(teapot);
     rotation.addChild(new Behavior("rotY", () {static float rot = 0; rotation.transformation.rotY(rot); rot = cast(float)(rot+0.1);}));
@@ -61,15 +22,14 @@ void main(string[] args) {
     PrintVisitor v = new PrintVisitor();
     root.accept(v);
 
-    OGLRenderVisitor ogl = new OGLRenderVisitor();
+    OGLRenderVisitor ogl = new OGLRenderVisitor(w);
     BehaviorVisitor behavior = new BehaviorVisitor();
-    while (!glfwWindowShouldClose(window)) {
+
+    while (!glfwWindowShouldClose(w.window)) {
         root.accept(behavior);
         root.accept(ogl);
 
-        glfwSwapBuffers(window);
+        glfwSwapBuffers(w.window);
         glfwPollEvents();
     }
-
-    glfwTerminate();
 }

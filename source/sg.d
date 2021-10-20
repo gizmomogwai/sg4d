@@ -1,6 +1,7 @@
 module sg;
 import std.string;
 import std.math;
+import window;
 class Node {
     Node[] childs;
     private string name;
@@ -107,7 +108,6 @@ class Transformation {
     float getData(int col, int row) {
         return m[col*4+row];
     }
-    
     Transformation invertAffine() {
         Transformation res = new Transformation();
         res.m[ 0] = m[ 0];
@@ -133,6 +133,11 @@ class Transformation {
         res.m[11] = 0;
 
         return res;
+    }
+    void setTranslation(float x, float y, float z) {
+        m[13] = x;
+        m[14] = x;
+        m[15] = x;
     }
     override string toString() {
         return "Transformation\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n".format(
@@ -169,6 +174,12 @@ class Observer : ProjectionNode {
     }
     Transformation getCameraTransform() {
         return projection.transformation.invertAffine();
+    }
+    void left() {
+        projection.transformation.m[12] -= .1;
+    }
+    void right() {
+        projection.transformation.m[12] += .1;
     }
 }
 class TransformationNode : Node {
@@ -264,15 +275,17 @@ class PrintVisitor : Visitor {
 
 class OGLRenderVisitor : Visitor {
     import bindbc.opengl;
-
+    Window window;
+    this(Window window) {
+        this.window = window;
+    }
     override void visit(Node n) {
         foreach (child; n.childs) {
             child.accept(this);
         }
     }
     override void visit(Root n) {
-        import bindbc.opengl.bind.dep.dep11;
-        glClearColor(0, 0, 1, 1);
+        glClearColor(0, 0, 0, 1);
         glColor3f(1, 1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glFrontFace(GL_CCW);
@@ -292,11 +305,10 @@ class OGLRenderVisitor : Visitor {
         glLoadIdentity();
         if (auto parallel = cast(ParallelProjection)(n.projection)) {
             float f = 1;
-            float halfWidth = 100 / 2.0f / f; // TODO
-            float halfHeight = 100 / 2.0f / f;
+            float halfWidth =  window.width / 2.0f / f;
+            float halfHeight = window.height / 2.0f / f;
             glOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, -100, 100); // TODO
         } else if (auto camera = cast(CameraProjection)(n.projection)) {
-            glMultMatrixf(cast(GLfloat*)camera.transformation.m);
         } else {
             throw new Exception("nyi");
         }
