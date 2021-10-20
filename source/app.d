@@ -43,7 +43,6 @@ void main(string[] args) {
 
     glfwSetKeyCallback(window, &staticKeyCallback);
     glfwMakeContextCurrent(window);
-
     loadBindBCOpenGL();
 
     writeln("OGLVendor:   ", glGetString(GL_VENDOR).to!string);
@@ -52,17 +51,20 @@ void main(string[] args) {
     writeln("OGLExt:      ", glGetString(GL_EXTENSIONS).to!string);
     import sg;
     Root root = new Root("root");
-    Observer observer = new Observer("observer", null, new ParallelProjection());
+    Observer observer = new Observer("observer", args[1] == "parallel" ? new ParallelProjection() : new CameraProjection());
     TransformationNode rotation = new TransformationNode("rotation", new Transformation());
     Shape teapot = new Shape("cube");
     rotation.addChild(teapot);
+    rotation.addChild(new Behavior("rotY", () {static float rot = 0; rotation.transformation.rotY(rot); rot = cast(float)(rot+0.1);}));
     observer.addChild(rotation);
     root.addChild(observer);
     PrintVisitor v = new PrintVisitor();
     root.accept(v);
 
     OGLRenderVisitor ogl = new OGLRenderVisitor();
+    BehaviorVisitor behavior = new BehaviorVisitor();
     while (!glfwWindowShouldClose(window)) {
+        root.accept(behavior);
         root.accept(ogl);
 
         glfwSwapBuffers(window);

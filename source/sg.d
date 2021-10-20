@@ -1,6 +1,6 @@
 module sg;
 import std.string;
-
+import std.math;
 class Node {
     Node[] childs;
     private string name;
@@ -24,12 +24,10 @@ class Root : Node {
     }
 }
 class ProjectionNode : Node {
-    CameraProjection camera;
-    ParallelProjection parallel;
-    this(string _name, CameraProjection camera, ParallelProjection parallel) {
+    Projection projection;
+    this(string _name, Projection projection) {
         super(_name);
-        this.camera = camera;
-        this.parallel = parallel;
+        this.projection = projection;
     }
     override void accept(Visitor v) {
         v.visit(this);
@@ -44,6 +42,9 @@ class ProjectionNode : Node {
 class Transformation {
     float[16] m;
     this() {
+        setId();
+    }
+    void setId() {
         m[ 0] = 1;
         m[ 1] = 0;
         m[ 2] = 0;
@@ -61,10 +62,88 @@ class Transformation {
         m[14] = 0;
         m[15] = 1;
     }
+    void rotX(float rad) {
+        float s = sin(rad);
+        float c = cos(rad);
+
+        m[ 0] = 1;
+        m[ 1] = 0;
+        m[ 2] = 0;
+        m[ 4] = 0;
+        m[ 5] = c;
+        m[ 6] = -s;
+        m[ 8] = 0;
+        m[ 9] = s;
+        m[10] = c;
+    }
+    void rotY(float rad) {
+        float s = sin(rad);
+        float c = cos(rad);
+
+        m[ 0] = c;
+        m[ 1] = 0;
+        m[ 2] = -s;
+        m[ 4] = 0;
+        m[ 5] = 1;
+        m[ 6] = 0;
+        m[ 8] = s;
+        m[ 9] = 0;
+        m[10] = c;
+    }
+    void rotZ(float rad) {
+        float s = sin(rad);
+        float c = cos(rad);
+
+        m[ 0] = c;
+        m[ 1] = -s;
+        m[ 2] = 0;
+        m[ 4] = s;
+        m[ 5] = c;
+        m[ 6] = 0;
+        m[ 8] = 0;
+        m[ 9] = 0;
+        m[10] = 1;
+    }
+    float getData(int col, int row) {
+        return m[col*4+row];
+    }
+    
     Transformation invertAffine() {
-        return this;
+        Transformation res = new Transformation();
+        res.m[ 0] = m[ 0];
+        res.m[ 5] = m[ 5];
+        res.m[10] = m[10];
+        res.m[15] = m[15];
+
+        res.m[ 1] = m[ 4];
+        res.m[ 4] = m[ 1];
+
+        res.m[ 2] = m[ 8];
+        res.m[ 8] = m[ 2];
+
+        res.m[ 6] = m[ 9];
+        res.m[ 9] = m[ 6];
+
+        res.m[12] = -m[12];
+        res.m[13] = -m[13];
+        res.m[14] = -m[14];
+
+        res.m[ 3] = 0;
+        res.m[ 7] = 0;
+        res.m[11] = 0;
+
+        return res;
+    }
+    override string toString() {
+        return "Transformation\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n".format(
+            m[ 0], m[ 4], m[ 8], m[12],
+            m[ 1], m[ 5], m[ 9], m[13],
+            m[ 2], m[ 6], m[10], m[14],
+            m[ 3], m[ 7], m[11], m[15],
+        );
     }
 }
+
 class Projection {
     Transformation transformation;
     this(Transformation transformation) {
@@ -82,18 +161,14 @@ class CameraProjection : Projection {
     }
 }
 class Observer : ProjectionNode {
-    this(string name, CameraProjection camera, ParallelProjection parallel) {
-        super(name, camera, parallel);
+    this(string name, Projection projection) {
+        super(name, projection);
     }
     override void accept(Visitor v) {
         v.visit(this);
     }
     Transformation getCameraTransform() {
-        if (parallel !is null) {
-            return parallel.transformation.invertAffine();
-        } else {
-            throw new Exception("nyi");
-        }
+        return projection.transformation.invertAffine();
     }
 }
 class TransformationNode : Node {
@@ -114,6 +189,19 @@ class Shape : Node {
         v.visit(this);
     }
 }
+class Behavior : Node {
+    void delegate() behavior;
+    this(string name, void delegate() b) {
+        super(name);
+        this.behavior = b;
+    }
+    override void accept(Visitor v) {
+        v.visit(this);
+    }
+    void run() {
+        behavior();
+    }
+}
 class Visitor {
     void visit(Node n) {visitChilds(n);}
     void visit(Root n) {visitChilds(n);}
@@ -121,8 +209,18 @@ class Visitor {
     void visit(Observer n) {visitChilds(n);}
     void visit(TransformationNode n) {visitChilds(n);}
     void visit(Shape n) {visitChilds(n);}
+    void visit(Behavior n) {visitChilds(n);}
     protected void visitChilds(Node n) {
         foreach(child ; n.childs) {child.accept(this);}
+    }
+}
+class BehaviorVisitor : Visitor {
+    alias visit = Visitor.visit;
+    override void visit(Behavior n) {
+        n.run();
+        foreach (child; n.childs) {
+            child.accept(this);
+        }
     }
 }
 
@@ -146,6 +244,9 @@ class PrintVisitor : Visitor {
     }
     override void visit(Shape n) {
         writeNode("Shape", n);
+    }
+    override void visit(Behavior n) {
+        writeNode("Behavior", n);
     }
     private void writeNode(string type, Node node) {
         writeln(indent, type, " {");
@@ -189,11 +290,13 @@ class OGLRenderVisitor : Visitor {
     override void visit(ProjectionNode n) {
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        if (n.parallel !is null) {
+        if (auto parallel = cast(ParallelProjection)(n.projection)) {
             float f = 1;
             float halfWidth = 100 / 2.0f / f; // TODO
             float halfHeight = 100 / 2.0f / f;
             glOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, -100, 100); // TODO
+        } else if (auto camera = cast(CameraProjection)(n.projection)) {
+            glMultMatrixf(cast(GLfloat*)camera.transformation.m);
         } else {
             throw new Exception("nyi");
         }
@@ -228,5 +331,7 @@ class OGLRenderVisitor : Visitor {
             glColor3f(0, 0, 1);
             glVertex3f(5, 10, 0);
         } glEnd();
+    }
+    override void visit(Behavior n) {
     }
 }
