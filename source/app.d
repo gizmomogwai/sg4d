@@ -6,30 +6,30 @@ import sg;
 import window;
 
 void main(string[] args) {
-    Root root = new Root("root");
+    auto root = new Root("root");
     auto projection = args[1] == "parallel" ?
-        new ParallelProjection() :
+        new ParallelProjection(-10000, 10000) :
         new CameraProjection();
-    Observer observer = new Observer("observer", projection);
-    TransformationNode rotation = new TransformationNode("rotation", new Transformation());
+    auto observer = new Observer("observer", projection);
+    auto rotation = new TransformationNode("rotation", mat4.identity());
 
-    Window w = new Window(observer);
-    Shape teapot = new Shape("cube");
-    rotation.addChild(teapot);
-    rotation.addChild(new Behavior("rotY", () {static float rot = 0; rotation.transformation.rotY(rot); rot = cast(float)(rot+0.1);}));
+    auto window = new Window(observer);
+    auto shape = new Shape("cube");
+    rotation.addChild(shape);
+    rotation.addChild(new Behavior("rotY", () {static float rot = 0; rotation.transformation = mat4.yrotation(rot); rot = cast(float)(rot+0.01);}));
     observer.addChild(rotation);
     root.addChild(observer);
     PrintVisitor v = new PrintVisitor();
     root.accept(v);
 
-    OGLRenderVisitor ogl = new OGLRenderVisitor(w);
+    OGLRenderVisitor ogl = new OGLRenderVisitor(window);
     BehaviorVisitor behavior = new BehaviorVisitor();
 
-    while (!glfwWindowShouldClose(w.window)) {
+    while (!glfwWindowShouldClose(window.window)) {
         root.accept(behavior);
         root.accept(ogl);
 
-        glfwSwapBuffers(w.window);
+        glfwSwapBuffers(window.window);
         glfwPollEvents();
     }
 }

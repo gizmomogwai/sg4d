@@ -4,8 +4,6 @@ authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
 dependency "bindbc-glfw" version="~>1.0.0"
-versions "GLFW_33"
-
 dependency "bindbc-opengl" version="~>1.0.0"
-versions "Default" "GL_ARB" "GL_AllowDeprecated"
-
+dependency "gl3n" version="*"
+versions "GLFW_33" "Default" "GL_ARB" "GL_AllowDeprecated"

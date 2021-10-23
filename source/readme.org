@@ -5,3 +5,7 @@
   CLOSED: [2021-10-19 Tue 22:51]
   - CLOSING NOTE [2021-10-19 Tue 22:51]
 * TODO add observer movements with camera
+  was momentan da ist ist nicht korrekt ...
+  observer hat position und rotation + projection
+  
+* TODO play around with std.concurrency and render and sg updatethreads

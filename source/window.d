@@ -18,9 +18,7 @@ void loadBindBCGlfw() {
 
 void loadBindBCOpenGL() {
     auto result = loadOpenGL();
-    writeln(result);
     if (result == GLSupport.gl21) {
-        writeln("yes .. .gl41 support is on");
     }  else {
         throw new Exception("need opengl 2.1 support");
     }
@@ -30,8 +28,10 @@ void loadBindBCOpenGL() {
 class Window {
     Observer observer;
     GLFWwindow* window;
-    int width;
-    int height;
+    private int width;
+    private int height;
+    float xscale;
+    float yscale;
     this(Observer observer) {
         this.observer = observer;
         loadBindBCGlfw();
@@ -40,10 +40,11 @@ class Window {
         glfwSetWindowUserPointer(window, cast(void*)this);
         glfwSetKeyCallback(window, &staticKeyCallback);
         glfwSetWindowSizeCallback(window, &staticSizeCallback);
+        glfwGetWindowContentScale(window, &xscale, &yscale);
+        writeln(xscale, ", ", yscale);
         staticSizeCallback(window, 100, 100);
         glfwMakeContextCurrent(window);
         loadBindBCOpenGL();
-
         writeln("OGLVendor:   ", glGetString(GL_VENDOR).to!string);
         writeln("OGLRenderer: ", glGetString(GL_RENDERER).to!string);
         writeln("OGLVersion:  ", glGetString(GL_VERSION).to!string);
@@ -54,15 +55,21 @@ class Window {
     }
     void keyCallback(int key, int scancode, int action, int mods) {
         if (key == 'A') {
-            observer.left();
+            observer.strafeLeft();
         }
         if (key == 'D') {
-            observer.right();
+            observer.strafeRight();
         }
     }
     void sizeCallback(int width, int height) {
         this.width = width;
         this.height = height;
+    }
+    int getWidth() {
+        return cast(int)(width * xscale);
+    }
+    int getHeight() {
+        return cast(int)(height * yscale);
     }
 }
 
