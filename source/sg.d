@@ -5,6 +5,24 @@ import std.math;
 import window;
 
 public import gl3n.linalg;
+public import imagefmt;
+
+void checkOglError()
+{
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR)
+    {
+        throw new Exception("ogl error %s".format(err));
+    }
+}
+
+int glGetInt(GLenum what)
+{
+    int result;
+    glGetIntegerv(what, &result);
+    checkOglError();
+    return result;
+}
 
 class Node
 {
@@ -150,11 +168,158 @@ class TransformationNode : Node
     }
 }
 
+class Geometry
+{
+}
+
+class TriangleArray : Geometry
+{
+    enum Type
+    {
+        ARRAY,
+        STRIP,
+        FAN
+    }
+
+    Type type;
+    vec3[] coordinates;
+    vec4[] colors;
+    vec2[] textureCoordinates;
+    // TODO normals
+    this(Type type, vec3[] coordinates, vec4[] colors, vec2[] textureCoordinates)
+    {
+        this.type = type;
+        this.coordinates = coordinates;
+        this.colors = colors;
+        this.textureCoordinates = textureCoordinates;
+    }
+}
+
+class CubeGeometry : TriangleArray
+{
+    this(float s)
+    {
+        super(Type.ARRAY, [
+                // back
+                vec3(-s, -s, -s), vec3(-s, s, -s), vec3(s, s, -s),
+
+                vec3(-s, -s, -s), vec3(s, s, -s), vec3(s, -s, -s),
+
+                // front
+                vec3(-s, -s, s), vec3(s, -s, s), vec3(s, s, s), vec3(-s, -s,
+                    s), vec3(s, s, s), vec3(-s, s, s),
+
+                // top
+                vec3(-s, s, -s), vec3(-s, s, s), vec3(s, s, s), vec3(-s, s,
+                    -s), vec3(s, s, s), vec3(s, s, -s),
+
+                // bottom
+                vec3(-s, -s, -s), vec3(s, -s, -s), vec3(s, -s, s),
+
+                vec3(-s, -s, -s), vec3(s, -s, s), vec3(-s, -s, s),
+
+                // left
+                vec3(-s, -s, -s), vec3(-s, -s, s), vec3(-s, s, s),
+
+                vec3(-s, -s, -s), vec3(-s, s, s), vec3(-s, s, -s),
+
+                // right
+                vec3(s, -s, -s), vec3(s, s, -s), vec3(s, s, s), vec3(s, -s,
+                    -s), vec3(s, s, s), vec3(s, -s, s),
+                ], [
+                // back
+                vec4(1, 0, 0, 1), vec4(1, 0, 0, 1), vec4(1, 0, 0, 1),
+
+                vec4(1, 0, 0, 1), vec4(1, 0, 0, 1), vec4(1, 0, 0, 1),
+
+                // front
+                vec4(1, 1, 0, 1), vec4(1, 1, 0, 1), vec4(1, 1, 0, 1),
+
+                vec4(1, 1, 0, 1), vec4(1, 1, 0, 1), vec4(1, 1, 0, 1),
+
+                // top
+                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+
+                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+
+                // bottom
+                vec4(0, 1, 0, 1), vec4(0, 1, 0, 1), vec4(0, 1, 0, 1),
+
+                vec4(0, 1, 0, 1), vec4(0, 1, 0, 1), vec4(0, 1, 0, 1),
+
+                // left
+                vec4(0, 1, 1, 1), vec4(0, 1, 1, 1), vec4(0, 1, 1, 1),
+
+                vec4(0, 1, 1, 1), vec4(0, 1, 1, 1), vec4(0, 1, 1, 1),
+
+                // right
+                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+
+                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+                ], [
+                // back
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+
+                // front
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+
+                // bottom
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+
+                // top
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+
+                // left
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+
+                // right
+                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
+                vec2(0, 1),
+                ]);
+    }
+}
+
+class Appearance
+{
+    Texture[] textures;
+    this(Texture[] textures)
+    {
+        this.textures = textures;
+    }
+}
+
+class CustomData
+{
+}
+
+class Texture
+{
+    IFImage image;
+    bool wrapS;
+    bool wrapT;
+    CustomData customData;
+    this(IFImage image, bool wrapS = false, bool wrapT = false)
+    {
+        this.image = image;
+        this.wrapS = wrapS;
+        this.wrapT = wrapT;
+    }
+}
+
 class Shape : Node
 {
-    this(string _name)
+    Geometry geometry;
+    Appearance appearance;
+    this(string name, Geometry geometry, Appearance appearance)
     {
-        super(_name);
+        super(name);
+        this.geometry = geometry;
+        this.appearance = appearance;
     }
 
     override void accept(Visitor v)
@@ -376,54 +541,97 @@ class OGLRenderVisitor : Visitor
         glPopMatrix();
     }
 
+    class TextureName : CustomData
+    {
+        GLuint textureName;
+        this(GLuint textureName)
+        {
+            this.textureName = textureName;
+        }
+
+        ~this()
+        {
+            // TODO delete texture in ogl context
+        }
+    }
+
+    private TextureName createAndLoadTexture(Texture texture)
+    {
+        auto image = texture.image;
+        GLuint textureName;
+        glGenTextures(1, &textureName);
+        checkOglError();
+        glBindTexture(GL_TEXTURE_2D, textureName);
+        checkOglError();
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        checkOglError();
+        glTexImage2D(GL_TEXTURE_2D, // target
+                0, // level
+                GL_RGB, // internalFOrmat
+                image.w, // width
+                image.h, // height
+                0, // border
+                GL_RGB, // format
+                GL_UNSIGNED_BYTE, // type
+                image.buf8.ptr // pixels
+                );
+        checkOglError();
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        checkOglError();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        checkOglError();
+        auto result = new TextureName(textureName);
+        texture.customData = result;
+        return result;
+    }
+
+    private void activate(Texture texture)
+    {
+        glEnable(GL_TEXTURE_2D);
+        checkOglError();
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.wrapS ? GL_REPEAT : GL_CLAMP);
+        checkOglError();
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
+        checkOglError();
+
+        auto textureName = cast(TextureName) texture.customData is null
+            ? createAndLoadTexture(texture) : cast(TextureName) texture.customData;
+        glBindTexture(GL_TEXTURE_2D, textureName.textureName);
+        checkOglError();
+    }
+
     override void visit(Shape n)
     {
-        glBegin(GL_QUADS);
+        if (auto appearance = n.appearance)
         {
-            enum s = 1;
-            // back
-            glColor3f(1, 0, 0);
-            glVertex3f(-s, -s, -s);
-            glVertex3f(-s, s, -s);
-            glVertex3f(s, s, -s);
-            glVertex3f(s, -s, -s);
-
-            // front
-            glColor3f(0, 1, 0);
-            glVertex3f(-s, -s, s);
-            glVertex3f(s, -s, s);
-            glVertex3f(s, s, s);
-            glVertex3f(-s, s, s);
-
-            // top
-            glColor3f(0, 0, 1);
-            glVertex3f(-s, s, -s);
-            glVertex3f(-s, s, s);
-            glVertex3f(s, s, s);
-            glVertex3f(s, s, -s);
-
-            // bottom
-            glColor3f(1, 1, 0);
-            glVertex3f(-s, -s, -s);
-            glVertex3f(s, -s, -s);
-            glVertex3f(s, -s, s);
-            glVertex3f(-s, -s, s);
-
-            // left
-            glColor3f(1, 0, 1);
-            glVertex3f(-s, -s, -s);
-            glVertex3f(-s, -s, s);
-            glVertex3f(-s, s, s);
-            glVertex3f(-s, s, -s);
-
-            // right
-            glColor3f(0, 1, 1);
-            glVertex3f(s, -s, -s);
-            glVertex3f(s, s, -s);
-            glVertex3f(s, s, s);
-            glVertex3f(s, -s, s);
+            if (appearance.textures != null)
+            {
+                if (appearance.textures.length > 0)
+                {
+                    activate(appearance.textures[0]);
+                }
+            }
         }
-        glEnd();
+
+        if (auto triangleArray = cast(TriangleArray) n.geometry)
+        {
+            glBegin(GL_TRIANGLES);
+            for (int i = 0; i < triangleArray.coordinates.length; ++i)
+            {
+                auto color = triangleArray.colors[i];
+                auto coordinates = triangleArray.coordinates[i];
+
+                if (triangleArray.textureCoordinates.length > i)
+                {
+                    auto textureCoordinates = triangleArray.textureCoordinates[i];
+                    glTexCoord2f(textureCoordinates.x, textureCoordinates.y);
+                }
+                glColor3f(color.x, color.y, color.z);
+                glVertex3f(coordinates.x, coordinates.y, coordinates.z);
+            }
+            glEnd();
+        }
     }
 
     override void visit(Behavior n)

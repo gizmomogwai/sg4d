@@ -4,6 +4,7 @@
 		"bindbc-glfw": "1.0.0",
 		"bindbc-loader": "1.0.1",
 		"bindbc-opengl": "1.0.0",
-		"gl3n": "1.4.1"
+		"gl3n": "1.4.1",
+		"imagefmt": "2.1.2"
 	}
 }

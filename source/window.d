@@ -40,25 +40,26 @@ class Window
     private int height;
     float xscale;
     float yscale;
-    this(Observer observer, Root root)
+    this(Observer observer, Root root, int width, int height)
     {
         this.observer = observer;
         this.root = root;
         loadBindBCGlfw();
         glfwInit();
-        window = glfwCreateWindow(100, 100, "test", null, null);
+        window = glfwCreateWindow(width, height, "test", null, null);
         glfwSetWindowUserPointer(window, cast(void*) this);
         glfwSetKeyCallback(window, &staticKeyCallback);
         glfwSetWindowSizeCallback(window, &staticSizeCallback);
         glfwGetWindowContentScale(window, &xscale, &yscale);
         writeln(xscale, ", ", yscale);
-        staticSizeCallback(window, 100, 100);
+        staticSizeCallback(window, width, height);
         glfwMakeContextCurrent(window);
         loadBindBCOpenGL();
-        writeln("OGLVendor:   ", glGetString(GL_VENDOR).to!string);
-        writeln("OGLRenderer: ", glGetString(GL_RENDERER).to!string);
-        writeln("OGLVersion:  ", glGetString(GL_VERSION).to!string);
-        writeln("OGLExt:      ", glGetString(GL_EXTENSIONS).to!string);
+        writeln("OGLVendor:        ", glGetString(GL_VENDOR).to!string);
+        writeln("OGLRenderer:      ", glGetString(GL_RENDERER).to!string);
+        writeln("OGLVersion:       ", glGetString(GL_VERSION).to!string);
+        writeln("OGLExt:           ", glGetString(GL_EXTENSIONS).to!string);
+        writeln("MAX_TEXTURE_SIZE: ", glGetInt(GL_MAX_TEXTURE_SIZE).to!string);
     }
 
     ~this()
