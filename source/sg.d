@@ -614,6 +614,7 @@ class OGLRenderVisitor : Visitor
             }
         }
 
+        /+ immediate mode
         if (auto triangleArray = cast(TriangleArray) n.geometry)
         {
             glBegin(GL_TRIANGLES);
@@ -631,6 +632,24 @@ class OGLRenderVisitor : Visitor
                 glVertex3f(coordinates.x, coordinates.y, coordinates.z);
             }
             glEnd();
+        }
+        +/
+        if (auto triangleArray = cast(TriangleArray) n.geometry)
+        {
+            glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
+            {
+                glEnableClientState(GL_VERTEX_ARRAY);
+                glVertexPointer(3, GL_FLOAT, 0, triangleArray.coordinates.ptr);
+
+                glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+                glTexCoordPointer(2, GL_FLOAT, 0, triangleArray.textureCoordinates.ptr);
+
+                glEnableClientState(GL_COLOR_ARRAY);
+                glColorPointer(4, GL_FLOAT, 0, triangleArray.colors.ptr);
+
+                glDrawArrays(GL_TRIANGLES, 0, cast(int)triangleArray.coordinates.length);
+            }
+            glPopClientAttrib();
         }
     }
 
