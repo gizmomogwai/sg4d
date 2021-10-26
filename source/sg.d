@@ -2,6 +2,7 @@ module sg;
 import std.stdio;
 import std.string;
 import std.math;
+import std.typecons;
 import window;
 
 public import gl3n.linalg;
@@ -170,17 +171,16 @@ class TransformationNode : Node
 
 class Geometry
 {
-}
-
-class TriangleArray : Geometry
-{
     enum Type
     {
         ARRAY,
         STRIP,
         FAN
     }
+}
 
+class TriangleArray : Geometry
+{
     Type type;
     vec3[] coordinates;
     vec4[] colors;
@@ -195,92 +195,319 @@ class TriangleArray : Geometry
     }
 }
 
-class CubeGeometry : TriangleArray
+class VertexData
 {
-    this(float s)
+    enum Component
     {
+        VERTICES = 1,
+        COLORS = 2,
+        TEXTURE_COORDINATES = 4,
+        NORMALS = 8,
+    }
+
+    alias BitFlags!Component Components;
+    Components components;
+    float[] data;
+
+    uint tupleSize;
+    uint colorsOffset = 0;
+    uint textureCoordinatesOffset = 0;
+    uint normalsOffset = 0;
+
+    this(Components components, uint size)
+    {
+        this.components = components;
+        uint offset = 0;
+        if (components.VERTICES == false)
+        {
+            throw new Exception("At least vertices need to be given");
+        }
+        tupleSize = 3;
+        offset += 3;
+        if (components.COLORS)
+        {
+            tupleSize += 4;
+            colorsOffset = offset;
+            offset += 4;
+        }
+
+        if (components.TEXTURE_COORDINATES)
+        {
+            tupleSize += 2;
+            textureCoordinatesOffset = offset;
+            offset += 2;
+        }
+
+        if (components.NORMALS)
+        {
+            tupleSize += 3;
+            normalsOffset = offset;
+            offset += 3;
+        }
+        data = new float[tupleSize * size];
+    }
+
+    void setVertex(uint idx, float x, float y, float z)
+    {
+        data[idx * tupleSize + 0] = x;
+        data[idx * tupleSize + 1] = y;
+        data[idx * tupleSize + 2] = z;
+    }
+
+    void setColor(uint idx, float r, float g, float b, float a = 1.0f)
+    {
+        data[idx * tupleSize + colorsOffset + 0] = r;
+        data[idx * tupleSize + colorsOffset + 1] = g;
+        data[idx * tupleSize + colorsOffset + 2] = b;
+        data[idx * tupleSize + colorsOffset + 3] = a;
+    }
+
+    void setTextureCoordinate(uint idx, float u, float v)
+    {
+        data[idx * tupleSize + textureCoordinatesOffset + 0] = u;
+        data[idx * tupleSize + textureCoordinatesOffset + 1] = v;
+    }
+}
+
+class IndexedInterleavedTriangleArray : Geometry
+{
+    Type type;
+    VertexData data;
+    uint[] indices;
+    this(Type type, VertexData data, uint[] indices)
+    {
+        this.type = type;
+        this.data = data;
+        this.indices = indices;
+    }
+}
+
+class IndexedInterleavedCube : IndexedInterleavedTriangleArray
+{
+    this(float size)
+    {
+        auto s = size;
+        // dfmt off
+        super(Type.ARRAY,
+              new VertexData(VertexData.Components(VertexData.Component.VERTICES, VertexData.Component.COLORS, VertexData.Component.TEXTURE_COORDINATES), 8),
+              [
+                  // back
+                  0, 2, 1, 0, 3, 2,
+                  // front
+                  4, 5, 6, 4, 6, 7,
+                  // left
+                  0, 4, 7, 0, 7, 3,
+                  // right
+                  5, 1, 2, 5, 2, 6,
+                  // top
+                  7, 6, 2, 7, 2, 3,
+                  // bottom
+                  4, 0, 1, 4, 1, 5,
+              ]);
+        // back
+        data.setVertex(0, -s, -s, -s);
+        data.setVertex(1,  s, -s, -s);
+        data.setVertex(2,  s,  s, -s);
+        data.setVertex(3, -s,  s, -s);
+
+        // front
+        data.setVertex(4, -s, -s,  s);
+        data.setVertex(5,  s, -s,  s);
+        data.setVertex(6,  s,  s,  s);
+        data.setVertex(7, -s,  s,  s);
+
+        data.setColor(0, 0, 0, 0);
+        data.setColor(1, 1, 0, 0);
+        data.setColor(2, 1, 1, 0);
+        data.setColor(3, 0, 1, 0);
+        data.setColor(4, 0, 1, 1);
+        data.setColor(5, 0, 0, 1);
+        data.setColor(6, 1, 0, 1);
+        data.setColor(7, 1, 1, 1);
+
+        data.setTextureCoordinate(0, 0, 0);
+        data.setTextureCoordinate(1, 1, 0);
+        data.setTextureCoordinate(2, 1, 1);
+        data.setTextureCoordinate(3, 0, 1);
+
+        data.setTextureCoordinate(4, 0, 0);
+        data.setTextureCoordinate(5, 1, 0);
+        data.setTextureCoordinate(6, 1, 1);
+        data.setTextureCoordinate(7, 0, 1);
+        // dfmt on
+    }
+}
+
+class TriangleArrayCube : TriangleArray
+{
+    this(float size)
+    {
+        auto s = size;
+        // dfmt off
         super(Type.ARRAY, [
-                // back
-                vec3(-s, -s, -s), vec3(-s, s, -s), vec3(s, s, -s),
+                  // back
+                  vec3(-s, -s, -s),
+                  vec3(-s, s, -s),
+                  vec3(s, s, -s),
 
-                vec3(-s, -s, -s), vec3(s, s, -s), vec3(s, -s, -s),
+                  vec3(-s, -s, -s),
+                  vec3(s, s, -s),
+                  vec3(s, -s, -s),
 
-                // front
-                vec3(-s, -s, s), vec3(s, -s, s), vec3(s, s, s), vec3(-s, -s,
-                    s), vec3(s, s, s), vec3(-s, s, s),
+                  // front
+                  vec3(-s, -s, s),
+                  vec3(s, -s, s),
+                  vec3(s, s, s),
 
-                // top
-                vec3(-s, s, -s), vec3(-s, s, s), vec3(s, s, s), vec3(-s, s,
-                    -s), vec3(s, s, s), vec3(s, s, -s),
+                  vec3(-s, -s, s),
+                  vec3(s, s, s),
+                  vec3(-s, s, s),
 
-                // bottom
-                vec3(-s, -s, -s), vec3(s, -s, -s), vec3(s, -s, s),
+                  // top
+                  vec3(-s, s, -s),
+                  vec3(-s, s, s),
+                  vec3(s, s, s),
 
-                vec3(-s, -s, -s), vec3(s, -s, s), vec3(-s, -s, s),
+                  vec3(-s, s,-s),
+                  vec3(s, s, s),
+                  vec3(s, s, -s),
 
-                // left
-                vec3(-s, -s, -s), vec3(-s, -s, s), vec3(-s, s, s),
+                  // bottom
+                  vec3(-s, -s, -s),
+                  vec3(s, -s, -s),
+                  vec3(s, -s, s),
 
-                vec3(-s, -s, -s), vec3(-s, s, s), vec3(-s, s, -s),
+                  vec3(-s, -s, -s),
+                  vec3(s, -s, s),
+                  vec3(-s, -s, s),
 
-                // right
-                vec3(s, -s, -s), vec3(s, s, -s), vec3(s, s, s), vec3(s, -s,
-                    -s), vec3(s, s, s), vec3(s, -s, s),
-                ], [
-                // back
-                vec4(1, 0, 0, 1), vec4(1, 0, 0, 1), vec4(1, 0, 0, 1),
+                  // left
+                  vec3(-s, -s, -s),
+                  vec3(-s, -s, s),
+                  vec3(-s, s, s),
 
-                vec4(1, 0, 0, 1), vec4(1, 0, 0, 1), vec4(1, 0, 0, 1),
+                  vec3(-s, -s, -s),
+                  vec3(-s, s, s),
+                  vec3(-s, s, -s),
 
-                // front
-                vec4(1, 1, 0, 1), vec4(1, 1, 0, 1), vec4(1, 1, 0, 1),
+                  // right
+                  vec3(s, -s, -s),
+                  vec3(s, s, -s),
+                  vec3(s, s, s),
 
-                vec4(1, 1, 0, 1), vec4(1, 1, 0, 1), vec4(1, 1, 0, 1),
+                  vec3(s, -s, -s),
+                  vec3(s, s, s),
+                  vec3(s, -s, s),
+              ], [
+                  // back
+                  vec4(1, 0, 0, 1),
+                  vec4(1, 0, 0, 1),
+                  vec4(1, 0, 0, 1),
 
-                // top
-                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+                  vec4(1, 0, 0, 1),
+                  vec4(1, 0, 0, 1),
+                  vec4(1, 0, 0, 1),
 
-                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+                  // front
+                  vec4(1, 1, 0, 1),
+                  vec4(1, 1, 0, 1),
+                  vec4(1, 1, 0, 1),
 
-                // bottom
-                vec4(0, 1, 0, 1), vec4(0, 1, 0, 1), vec4(0, 1, 0, 1),
+                  vec4(1, 1, 0, 1),
+                  vec4(1, 1, 0, 1),
+                  vec4(1, 1, 0, 1),
 
-                vec4(0, 1, 0, 1), vec4(0, 1, 0, 1), vec4(0, 1, 0, 1),
+                  // top
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
 
-                // left
-                vec4(0, 1, 1, 1), vec4(0, 1, 1, 1), vec4(0, 1, 1, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
 
-                vec4(0, 1, 1, 1), vec4(0, 1, 1, 1), vec4(0, 1, 1, 1),
+                  // bottom
+                  vec4(0, 1, 0, 1),
+                  vec4(0, 1, 0, 1),
+                  vec4(0, 1, 0, 1),
 
-                // right
-                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
+                  vec4(0, 1, 0, 1),
+                  vec4(0, 1, 0, 1),
+                  vec4(0, 1, 0, 1),
 
-                vec4(1, 0, 1, 1), vec4(1, 0, 1, 1), vec4(1, 0, 1, 1),
-                ], [
-                // back
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
+                  // left
+                  vec4(0, 1, 1, 1),
+                  vec4(0, 1, 1, 1),
+                  vec4(0, 1, 1, 1),
 
-                // front
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
+                  vec4(0, 1, 1, 1),
+                  vec4(0, 1, 1, 1),
+                  vec4(0, 1, 1, 1),
 
-                // bottom
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
+                  // right
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
 
-                // top
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
+                  vec4(1, 0, 1, 1),
+              ], [
+                  // back
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
 
-                // left
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
 
-                // right
-                vec2(0, 0), vec2(1, 0), vec2(1, 1), vec2(0, 0), vec2(1, 1),
-                vec2(0, 1),
-                ]);
+                  // front
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
+
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
+
+                  // bottom
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
+
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
+
+                  // top
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
+
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
+
+                  // left
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
+
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
+
+                  // right
+                  vec2(0, 0),
+                  vec2(1, 0),
+                  vec2(1, 1),
+
+                  vec2(0, 0),
+                  vec2(1, 1),
+                  vec2(0, 1),
+              ]);
+        // dfmt on
     }
 }
 
@@ -498,7 +725,7 @@ class OGLRenderVisitor : Visitor
         glFrontFace(GL_CCW);
         glCullFace(GL_BACK);
         glEnable(GL_CULL_FACE);
-        //glDisable(GL_CULL_FACE);
+        // glDisable(GL_CULL_FACE);
         glDisable(GL_DITHER);
         glDisable(GL_DEPTH_TEST);
         //  glDepthFunc(GL_LESS);
@@ -634,20 +861,41 @@ class OGLRenderVisitor : Visitor
             glEnd();
         }
         +/
-        if (auto triangleArray = cast(TriangleArray) n.geometry)
+        if (auto g = cast(TriangleArray) n.geometry)
         {
             glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
             {
                 glEnableClientState(GL_VERTEX_ARRAY);
-                glVertexPointer(3, GL_FLOAT, 0, triangleArray.coordinates.ptr);
+                glVertexPointer(3, GL_FLOAT, 0, g.coordinates.ptr);
 
                 glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                glTexCoordPointer(2, GL_FLOAT, 0, triangleArray.textureCoordinates.ptr);
+                glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
 
                 glEnableClientState(GL_COLOR_ARRAY);
-                glColorPointer(4, GL_FLOAT, 0, triangleArray.colors.ptr);
+                glColorPointer(4, GL_FLOAT, 0, g.colors.ptr);
 
-                glDrawArrays(GL_TRIANGLES, 0, cast(int)triangleArray.coordinates.length);
+                glDrawArrays(GL_TRIANGLES, 0, cast(int) g.coordinates.length);
+            }
+            glPopClientAttrib();
+        }
+
+        if (auto g = cast(IndexedInterleavedTriangleArray) n.geometry)
+        {
+            int stride = cast(int)(g.data.tupleSize * float.sizeof);
+            glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
+            {
+                glEnableClientState(GL_VERTEX_ARRAY);
+                glVertexPointer(3, GL_FLOAT, stride, g.data.data.ptr);
+
+                glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+                glTexCoordPointer(2, GL_FLOAT, stride,
+                        g.data.data.ptr + g.data.textureCoordinatesOffset);
+
+                glEnableClientState(GL_COLOR_ARRAY);
+                glColorPointer(4, GL_FLOAT, stride, g.data.data.ptr + g.data.colorsOffset);
+
+                glDrawElements(GL_TRIANGLES, cast(int) g.indices.length,
+                        GL_UNSIGNED_INT, g.indices.ptr);
             }
             glPopClientAttrib();
         }

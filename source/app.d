@@ -6,7 +6,7 @@ import std.string;
 import sg;
 import window;
 
-auto cube(string textureFile, float x, float y, float z, float rotationSpeed)
+auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bool indexed)
 {
     auto translation = new TransformationNode("translation-" ~ textureFile,
             mat4.translation(x, y, z));
@@ -16,7 +16,7 @@ auto cube(string textureFile, float x, float y, float z, float rotationSpeed)
     {
         throw new Exception("%s".format(IF_ERROR[image.e]));
     }
-    auto shape = new Shape("cube-" ~ textureFile, new CubeGeometry(1),
+    auto shape = new Shape("cube-" ~ textureFile, indexed ? new IndexedInterleavedCube(1) : new TriangleArrayCube(1),
             new Appearance([new Texture(image)]));
     rotation.addChild(shape);
     float rot = 0;
@@ -34,8 +34,8 @@ void main(string[] args)
     auto projection = args[1] == "parallel" ? new ParallelProjection(1, 1000) : new CameraProjection(1,
             1000);
     auto observer = new Observer("observer", projection);
-    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.01));
-    observer.addChild(cube("image2.jpg", 3, 0, 0, 0.02));
+    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.01, false));
+    observer.addChild(cube("image2.jpg", 3, 0, 0, 0.02, true));
 
     auto window = new Window(observer, root, 800, 600);
     root.addChild(observer);
