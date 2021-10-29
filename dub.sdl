@@ -4,6 +4,7 @@ authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
 targetType "library"
+targetPath "out"
 
 dependency "imagefmt" version="~>2.1.2"
 dependency "bindbc-glfw" version="~>1.0.0"
