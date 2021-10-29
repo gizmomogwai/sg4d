@@ -57,7 +57,7 @@ auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bo
 
 auto cubeSlow(string textureFile, float x, float y, float z, float rotationSpeed, bool indexed)
 {
-    Thread.sleep(dur!"seconds"(5));
+    Thread.sleep(dur!"seconds"(2));
     return cube(textureFile, x, y, z, rotationSpeed, indexed);
 }
 

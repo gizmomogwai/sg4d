@@ -1,0 +1,7 @@
+name "hello-world"
+description "Hello world for sg4d."
+authors "Christian Koestlin"
+copyright "Copyright (c) 2021, Christian Koestlin"
+license "MIT"
+dependency "argparse" version="~>0.4.0"
+dependency "sg4d" path="../.."
