@@ -1,0 +1,9 @@
+* Simple scene graph (ala Java3D) for dlang
+
+** Threading
+The implementation tries to enforce proper manipulation of the scene
+graph data (meaning changing the graph only from the right (the
+rendering) thread). For that each Node is either part of a scene
+connected to a renderthread or not. If it is not (yet) connected, one
+can do all the changes however one wants, if it is connected the
+changes need to be done in the renderThread.

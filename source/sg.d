@@ -1,12 +1,16 @@
+// https://www.iquilezles.org/www/index.htm
+// http://www.songho.ca/opengl/gl_sphere.html
+
 module sg;
 import std.stdio;
 import std.string;
 import std.math;
 import std.typecons;
 import window;
-
+import std.concurrency : Tid;
 public import gl3n.linalg;
 public import imagefmt;
+import optional;
 
 void checkOglError()
 {
@@ -27,11 +31,17 @@ int glGetInt(GLenum what)
 
 class Node
 {
+    protected Optional!Root root;
     Node[] childs;
     private string name;
     this(string _name)
     {
         name = _name;
+    }
+
+    void ensureRenderThread()
+    {
+        oc(root).ensureRenderThread;
     }
 
     void accept(Visitor v)
@@ -41,12 +51,53 @@ class Node
 
     void addChild(Node n)
     {
+        ensureRenderThread;
         childs ~= n;
+        if (!root.empty)
+        {
+            n.setRoot(root.front);
+        }
     }
-};
+
+    void setRoot(Root r)
+    {
+        if (live)
+        {
+            throw new Exception("Root already set");
+        }
+        root = r;
+        foreach (child; childs)
+        {
+            child.setRoot(r);
+        }
+    }
+
+    Node findByName(string name)
+    {
+        if (name == this.name)
+        {
+            return this;
+        }
+        foreach (child; childs)
+        {
+            auto h = child.findByName(name);
+            if (h !is null)
+            {
+                return h;
+            }
+        }
+        return null;
+    }
+
+    bool live()
+    {
+        return !root.empty;
+    }
+}
 
 class Root : Node
 {
+    private Optional!Tid renderThread;
     this(string _name)
     {
         super(_name);
@@ -56,11 +107,31 @@ class Root : Node
     {
         v.visit(this);
     }
+
+    auto bind(Tid tid)
+    {
+        renderThread = tid;
+        setRoot(this);
+        return this;
+    }
+
+    override void ensureRenderThread()
+    {
+        if (!renderThread.empty)
+        {
+            import std.concurrency;
+
+            if (thisTid != renderThread)
+            {
+                throw new Exception("methods on live object called from wrong thread");
+            }
+        }
+    }
 }
 
 class ProjectionNode : Node
 {
-    Projection projection;
+    private Projection projection;
     this(string _name, Projection projection)
     {
         super(_name);
@@ -114,7 +185,7 @@ class CameraProjection : Projection
 
 class Observer : ProjectionNode
 {
-    vec3 position = vec3(0, 0, 10);
+    private vec3 position = vec3(0, 0, 10);
     this(string name, Projection projection)
     {
         super(name, projection);
@@ -135,28 +206,32 @@ class Observer : ProjectionNode
     enum delta = 1;
     void forward()
     {
+        ensureRenderThread;
         position.z -= delta;
     }
 
     void backward()
     {
+        ensureRenderThread;
         position.z += delta;
     }
 
     void strafeLeft()
     {
+        ensureRenderThread;
         position.x -= delta;
     }
 
     void strafeRight()
     {
+        ensureRenderThread;
         position.x += delta;
     }
 }
 
 class TransformationNode : Node
 {
-    mat4 transformation;
+    private mat4 transformation;
     this(string _name, mat4 transformation)
     {
         super(_name);
@@ -167,9 +242,16 @@ class TransformationNode : Node
     {
         v.visit(this);
     }
+
+    auto setTransformation(mat4 transformation)
+    {
+        ensureRenderThread;
+        this.transformation = transformation;
+        return this;
+    }
 }
 
-class Geometry
+class Geometry : Node
 {
     enum Type
     {
@@ -177,17 +259,23 @@ class Geometry
         STRIP,
         FAN
     }
+
+    this(string name)
+    {
+        super(name);
+    }
 }
 
 class TriangleArray : Geometry
 {
-    Type type;
-    vec3[] coordinates;
-    vec4[] colors;
-    vec2[] textureCoordinates;
+    private Type type;
+    private vec3[] coordinates;
+    private vec4[] colors;
+    private vec2[] textureCoordinates;
     // TODO normals
-    this(Type type, vec3[] coordinates, vec4[] colors, vec2[] textureCoordinates)
+    this(string name, Type type, vec3[] coordinates, vec4[] colors, vec2[] textureCoordinates)
     {
+        super(name);
         this.type = type;
         this.coordinates = coordinates;
         this.colors = colors;
@@ -195,7 +283,7 @@ class TriangleArray : Geometry
     }
 }
 
-class VertexData
+class VertexData : Node
 {
     enum Component
     {
@@ -205,17 +293,18 @@ class VertexData
         NORMALS = 8,
     }
 
-    alias BitFlags!Component Components;
-    Components components;
-    float[] data;
+    alias Components = BitFlags!Component;
+    private Components components;
+    private float[] data;
 
-    uint tupleSize;
-    uint colorsOffset = 0;
-    uint textureCoordinatesOffset = 0;
-    uint normalsOffset = 0;
+    private uint tupleSize;
+    private uint colorsOffset = 0;
+    private uint textureCoordinatesOffset = 0;
+    private uint normalsOffset = 0;
 
-    this(Components components, uint size)
+    this(string name, Components components, uint size)
     {
+        super(name);
         this.components = components;
         uint offset = 0;
         if (components.VERTICES == false)
@@ -249,6 +338,7 @@ class VertexData
 
     void setVertex(uint idx, float x, float y, float z)
     {
+        ensureRenderThread;
         data[idx * tupleSize + 0] = x;
         data[idx * tupleSize + 1] = y;
         data[idx * tupleSize + 2] = z;
@@ -256,6 +346,7 @@ class VertexData
 
     void setColor(uint idx, float r, float g, float b, float a = 1.0f)
     {
+        ensureRenderThread;
         data[idx * tupleSize + colorsOffset + 0] = r;
         data[idx * tupleSize + colorsOffset + 1] = g;
         data[idx * tupleSize + colorsOffset + 2] = b;
@@ -264,6 +355,7 @@ class VertexData
 
     void setTextureCoordinate(uint idx, float u, float v)
     {
+        ensureRenderThread;
         data[idx * tupleSize + textureCoordinatesOffset + 0] = u;
         data[idx * tupleSize + textureCoordinatesOffset + 1] = v;
     }
@@ -271,11 +363,12 @@ class VertexData
 
 class IndexedInterleavedTriangleArray : Geometry
 {
-    Type type;
-    VertexData data;
-    uint[] indices;
-    this(Type type, VertexData data, uint[] indices)
+    private Type type;
+    private VertexData data;
+    private uint[] indices;
+    this(string name, Type type, VertexData data, uint[] indices)
     {
+        super(name);
         this.type = type;
         this.data = data;
         this.indices = indices;
@@ -284,12 +377,17 @@ class IndexedInterleavedTriangleArray : Geometry
 
 class IndexedInterleavedCube : IndexedInterleavedTriangleArray
 {
-    this(float size)
+    this(string name, float size)
     {
         auto s = size;
         // dfmt off
-        super(Type.ARRAY,
-              new VertexData(VertexData.Components(VertexData.Component.VERTICES, VertexData.Component.COLORS, VertexData.Component.TEXTURE_COORDINATES), 8),
+        super(name, Type.ARRAY,
+              new VertexData(name,
+                  VertexData.Components(
+                      VertexData.Component.VERTICES,
+                      VertexData.Component.COLORS,
+                      VertexData.Component.TEXTURE_COORDINATES
+                  ), 8),
               [
                   // back
                   0, 2, 1, 0, 3, 2,
@@ -340,11 +438,11 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
 
 class TriangleArrayCube : TriangleArray
 {
-    this(float size)
+    this(string name, float size)
     {
         auto s = size;
         // dfmt off
-        super(Type.ARRAY, [
+        super(name, Type.ARRAY, [
                   // back
                   vec3(-s, -s, -s),
                   vec3(-s, s, -s),
@@ -676,10 +774,11 @@ class PrintVisitor : Visitor
 
     private void writeNode(string type, Node node, void delegate(string) more = null)
     {
-        writeln(indent, type, " {");
-        auto oldIndent = indent;
+        writeln(indent, type);
+        const oldIndent = indent;
         indent ~= "  ";
         writeln(indent, "name=", node.name);
+        writeln(indent, "live=", node.live);
         if (more)
         {
             more(indent);
@@ -690,7 +789,6 @@ class PrintVisitor : Visitor
             child.accept(this);
         }
         indent = oldIndent;
-        writeln(indent, "}");
     }
 }
 
@@ -719,6 +817,7 @@ class OGLRenderVisitor : Visitor
 
     override void visit(Root n)
     {
+        n.ensureRenderThread;
         glClearColor(0, 0, 0, 1);
         glColor3f(1, 1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

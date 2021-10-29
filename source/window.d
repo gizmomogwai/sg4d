@@ -8,7 +8,7 @@ public import bindbc.opengl;
 
 void loadBindBCGlfw()
 {
-    auto result = loadGLFW();
+    const result = loadGLFW();
     if (result != glfwSupport)
     {
         foreach (info; glfwloader.errors)
@@ -21,7 +21,7 @@ void loadBindBCGlfw()
 
 void loadBindBCOpenGL()
 {
-    auto result = loadOpenGL();
+    const result = loadOpenGL();
     if (result == GLSupport.gl21)
     {
     }
@@ -31,19 +31,24 @@ void loadBindBCOpenGL()
     }
 }
 
+/++
+ + https://discourse.glfw.org/t/multithreading-glfw/573/5
+ +/
 class Window
 {
-    Observer observer;
     Root root;
     GLFWwindow* window;
     private int width;
     private int height;
     float xscale;
     float yscale;
-    this(Observer observer, Root root, int width, int height)
+    void delegate(int key, int scancode, int action, int mods) keyCallback;
+    this(Root root, int width, int height, void delegate(int key, int scancode,
+            int action, int mods) keyCallback)
     {
-        this.observer = observer;
         this.root = root;
+        root.bind(thisTid);
+        this.keyCallback = keyCallback;
         loadBindBCGlfw();
         glfwInit();
         window = glfwCreateWindow(width, height, "test", null, null);
@@ -51,10 +56,10 @@ class Window
         glfwSetKeyCallback(window, &staticKeyCallback);
         glfwSetWindowSizeCallback(window, &staticSizeCallback);
         glfwGetWindowContentScale(window, &xscale, &yscale);
-        writeln(xscale, ", ", yscale);
         staticSizeCallback(window, width, height);
         glfwMakeContextCurrent(window);
         loadBindBCOpenGL();
+        writeln("Use opengl");
         writeln("OGLVendor:        ", glGetString(GL_VENDOR).to!string);
         writeln("OGLRenderer:      ", glGetString(GL_RENDERER).to!string);
         writeln("OGLVersion:       ", glGetString(GL_VERSION).to!string);
@@ -65,35 +70,6 @@ class Window
     ~this()
     {
         glfwTerminate();
-    }
-
-    void keyCallback(int key, int scancode, int action, int mods)
-    {
-        if (key == 'A')
-        {
-            observer.strafeLeft();
-            return;
-        }
-        if (key == 'D')
-        {
-            observer.strafeRight();
-            return;
-        }
-        if (key == 'W')
-        {
-            observer.forward();
-            return;
-        }
-        if (key == 'S')
-        {
-            observer.backward();
-            return;
-        }
-        if (key == 'P')
-        {
-            root.accept(new PrintVisitor());
-            return;
-        }
     }
 
     void sizeCallback(int width, int height)

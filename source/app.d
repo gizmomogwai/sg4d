@@ -2,6 +2,20 @@ import std.stdio;
 import core.thread;
 import std.conv;
 import std.string;
+import std.concurrency;
+import argparse;
+
+static struct Args
+{
+    enum Projection
+    {
+        parallel,
+        camera
+    }
+
+    @(NamedArgument().Required())
+    Projection projection;
+}
 
 import sg;
 import window;
@@ -16,41 +30,121 @@ auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bo
     {
         throw new Exception("%s".format(IF_ERROR[image.e]));
     }
-    auto shape = new Shape("cube-" ~ textureFile, indexed ? new IndexedInterleavedCube(1) : new TriangleArrayCube(1),
-            new Appearance([new Texture(image)]));
+    // dfmt off
+    auto shape =
+        new Shape("cube-" ~ textureFile,
+                  indexed ?
+                      new IndexedInterleavedCube("cube(size=1)", 1)
+                      : new TriangleArrayCube("cube", 1),
+                  new Appearance([new Texture(image)])
+        );
+    // dfmt on
     rotation.addChild(shape);
     float rot = 0;
-    rotation.addChild(new Behavior("rotY-" ~ textureFile, () {
-            rotation.transformation = mat4.rotation(rot, vec3(1, 1, 1));
-            rot = cast(float)(rot + rotationSpeed);
-        }));
+    // dfmt off
+    rotation.addChild(
+        new Behavior("rotY-" ~ textureFile,
+            {
+                rotation.setTransformation(mat4.rotation(rot, vec3(1, 1, 1)));
+                rot = cast(float)(rot + rotationSpeed);
+            }
+        )
+    );
+    // dfmt on
     translation.addChild(rotation);
     return translation;
 }
 
-void main(string[] args)
+auto cubeSlow(string textureFile, float x, float y, float z, float rotationSpeed, bool indexed)
 {
+    Thread.sleep(dur!"seconds"(5));
+    return cube(textureFile, x, y, z, rotationSpeed, indexed);
+}
+
+Projection toProjection(Args.Projection projection)
+{
+    switch (projection)
+    {
+    case Args.Projection.parallel:
+        return new ParallelProjection(1, 1000);
+    case Args.Projection.camera:
+        return new CameraProjection(1, 1000);
+    default:
+        throw new Exception("Unknown projection: %s".format(projection));
+    }
+}
+
+mixin Main.parseCLIArgs!(Args, (Args args) {
     auto root = new Root("root");
-    auto projection = args[1] == "parallel" ? new ParallelProjection(1, 1000) : new CameraProjection(1,
-            1000);
+    auto projection = args.projection.toProjection;
     auto observer = new Observer("observer", projection);
+    root.addChild(observer);
     observer.addChild(cube("image1.jpg", 0, 0, 0, 0.01, false));
     observer.addChild(cube("image2.jpg", 3, 0, 0, 0.02, true));
+    auto mainTid = thisTid;
+    auto window = new Window(root, 800, 600, (int key, int, int action, int) {
+        if (key == 'A')
+        {
+            observer.strafeLeft();
+            return;
+        }
+        if (key == 'D')
+        {
+            observer.strafeRight();
+            return;
+        }
+        if (key == 'W')
+        {
+            observer.forward();
+            return;
+        }
+        if (key == 'S')
+        {
+            observer.backward();
+            return;
+        }
+        if (key == 'P')
+        {
+            root.accept(new PrintVisitor());
+            return;
+        }
+        if ((key == '1') && (action == GLFW_RELEASE))
+        {
+            new Thread({
+                try
+                {
+                    import std.random;
 
-    auto window = new Window(observer, root, 800, 600);
-    root.addChild(observer);
+                    auto cube = cubeSlow("image1.jpg", uniform(0, 10), 0, 0, 0.05, false);
+                    mainTid.send(cast(shared) { observer.addChild(cube); });
+                }
+                catch (Exception e)
+                {
+                    writeln(e);
+                }
+            }).start();
+        }
+    });
+
     PrintVisitor v = new PrintVisitor();
     root.accept(v);
 
-    OGLRenderVisitor ogl = new OGLRenderVisitor(window);
-    BehaviorVisitor behavior = new BehaviorVisitor();
+    Visitor[] visitors = [new OGLRenderVisitor(window), new BehaviorVisitor()];
 
     while (!glfwWindowShouldClose(window.window))
     {
-        root.accept(behavior);
-        root.accept(ogl);
+        foreach (visitor; visitors)
+        {
+            root.accept(visitor);
+        }
 
         glfwSwapBuffers(window.window);
+
+        // poll glfw and scene graph "events"
         glfwPollEvents();
+        receiveTimeout(msecs(-1), (shared void delegate() codeForOglThread) {
+            codeForOglThread();
+        });
     }
-}
+
+});
