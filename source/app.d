@@ -75,14 +75,14 @@ Projection toProjection(Args.Projection projection)
 }
 
 mixin Main.parseCLIArgs!(Args, (Args args) {
-    auto root = new Root("root");
+    auto scene = new Scene("scene");
     auto projection = args.projection.toProjection;
     auto observer = new Observer("observer", projection);
-    root.addChild(observer);
+    scene.addChild(observer);
     observer.addChild(cube("image1.jpg", 0, 0, 0, 0.01, false));
     observer.addChild(cube("image2.jpg", 3, 0, 0, 0.02, true));
     auto mainTid = thisTid;
-    auto window = new Window(root, 800, 600, (int key, int, int action, int) {
+    auto window = new Window(scene, 800, 600, (int key, int, int action, int) {
         if (key == 'A')
         {
             observer.strafeLeft();
@@ -105,7 +105,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         }
         if (key == 'P')
         {
-            root.accept(new PrintVisitor());
+            scene.accept(new PrintVisitor());
             return;
         }
         if ((key == '1') && (action == GLFW_RELEASE))
@@ -127,7 +127,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     });
 
     PrintVisitor v = new PrintVisitor();
-    root.accept(v);
+    scene.accept(v);
 
     Visitor[] visitors = [new OGLRenderVisitor(window), new BehaviorVisitor()];
 
@@ -135,7 +135,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     {
         foreach (visitor; visitors)
         {
-            root.accept(visitor);
+            scene.accept(visitor);
         }
 
         glfwSwapBuffers(window.window);

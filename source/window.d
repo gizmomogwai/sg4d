@@ -36,18 +36,18 @@ void loadBindBCOpenGL()
  +/
 class Window
 {
-    Root root;
+    Scene scene;
     GLFWwindow* window;
     private int width;
     private int height;
     float xscale;
     float yscale;
     void delegate(int key, int scancode, int action, int mods) keyCallback;
-    this(Root root, int width, int height, void delegate(int key, int scancode,
+    this(Scene scene, int width, int height, void delegate(int key, int scancode,
             int action, int mods) keyCallback)
     {
-        this.root = root;
-        root.bind(thisTid);
+        this.scene = scene;
+        scene.bind(thisTid);
         this.keyCallback = keyCallback;
         loadBindBCGlfw();
         glfwInit();

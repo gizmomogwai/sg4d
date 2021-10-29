@@ -31,7 +31,7 @@ int glGetInt(GLenum what)
 
 class Node
 {
-    protected Optional!Root root;
+    protected Optional!Scene scene;
     Node[] childs;
     private string name;
     this(string _name)
@@ -41,7 +41,7 @@ class Node
 
     void ensureRenderThread()
     {
-        oc(root).ensureRenderThread;
+        oc(scene).ensureRenderThread;
     }
 
     void accept(Visitor v)
@@ -53,22 +53,22 @@ class Node
     {
         ensureRenderThread;
         childs ~= n;
-        if (!root.empty)
+        if (!scene.empty)
         {
-            n.setRoot(root.front);
+            n.setScene(scene.front);
         }
     }
 
-    void setRoot(Root r)
+    void setScene(Scene scene)
     {
         if (live)
         {
-            throw new Exception("Root already set");
+            throw new Exception("Node '%s' already attached to a scene".format(name));
         }
-        root = r;
+        this.scene = scene;
         foreach (child; childs)
         {
-            child.setRoot(r);
+            child.setScene(scene);
         }
     }
 
@@ -91,11 +91,11 @@ class Node
 
     bool live()
     {
-        return !root.empty;
+        return !scene.empty;
     }
 }
 
-class Root : Node
+class Scene : Node
 {
     private Optional!Tid renderThread;
     this(string _name)
@@ -111,7 +111,7 @@ class Root : Node
     auto bind(Tid tid)
     {
         renderThread = tid;
-        setRoot(this);
+        setScene(this);
         return this;
     }
 
@@ -680,7 +680,7 @@ class Visitor
         visitChilds(n);
     }
 
-    void visit(Root n)
+    void visit(Scene n)
     {
         visitChilds(n);
     }
@@ -742,9 +742,9 @@ class PrintVisitor : Visitor
         writeNode("Node", node);
     }
 
-    override void visit(Root n)
+    override void visit(Scene n)
     {
-        writeNode("Root", n);
+        writeNode("Scene", n);
     }
 
     override void visit(ProjectionNode n)
@@ -815,7 +815,7 @@ class OGLRenderVisitor : Visitor
         }
     }
 
-    override void visit(Root n)
+    override void visit(Scene n)
     {
         n.ensureRenderThread;
         glClearColor(0, 0, 0, 1);
