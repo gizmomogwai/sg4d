@@ -38,7 +38,9 @@ class Node
     {
         name = _name;
     }
-
+    auto getName() {
+        return name;
+    }
     void ensureRenderThread()
     {
         oc(scene).ensureRenderThread;

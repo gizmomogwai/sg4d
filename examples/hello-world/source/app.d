@@ -4,6 +4,7 @@ import std.conv;
 import std.string;
 import std.concurrency;
 import argparse;
+import std.random;
 
 static struct Args
 {
@@ -19,6 +20,35 @@ static struct Args
 
 import sg;
 import window;
+
+auto cube(string name, Texture texture, float x, float y, float z, float rotationSpeed, bool indexed)
+{
+    auto translation = new TransformationNode("translation-" ~ name, mat4.translation(x, y, z));
+    auto rotation = new TransformationNode("rotation-" ~ name, mat4.identity());
+    // dfmt off
+    auto shape =
+        new Shape("cube-" ~ name,
+                  indexed ?
+                      new IndexedInterleavedCube("cube(size=1)", 1)
+                      : new TriangleArrayCube("cube", 1),
+                  new Appearance([texture])
+        );
+    // dfmt on
+    rotation.addChild(shape);
+    float rot = 0;
+    // dfmt off
+    rotation.addChild(
+        new Behavior("rotY-" ~ name,
+            {
+                rotation.setTransformation(mat4.rotation(rot, vec3(1, 1, 1)));
+                rot = cast(float)(rot + rotationSpeed);
+            }
+        )
+    );
+    // dfmt on
+    translation.addChild(rotation);
+    return translation;
+}
 
 auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bool indexed)
 {
@@ -74,13 +104,33 @@ Projection toProjection(Args.Projection projection)
     }
 }
 
+void add100Nodes(shared(Node) observer) {
+    try
+    {
+        auto t = new Texture(read_image("image1.jpg"));
+        // dfmt off
+        foreach (i; 0 .. 100)
+        {
+            () {
+                auto cube = cube("cube %s".format(i), t, uniform(0, 10), uniform(0, 10), 0, uniform(0, 0.01), true);
+                ownerTid.send(cast(shared) { (cast()observer).addChild(cube); });
+            }(); // stupid ascii art see https://forum.dlang.org/thread/ckkswkkvhfojbcczijim@forum.dlang.org?page=2
+        }
+        // dfmt on
+    }
+    catch (Exception e)
+    {
+        writeln(e);
+    }
+}
+
 mixin Main.parseCLIArgs!(Args, (Args args) {
     auto scene = new Scene("scene");
     auto projection = args.projection.toProjection;
     auto observer = new Observer("observer", projection);
     scene.addChild(observer);
-    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.01, false));
-    observer.addChild(cube("image2.jpg", 3, 0, 0, 0.02, true));
+    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.001, false));
+    observer.addChild(cube("image2.jpg", 3, 0, 0, 0.002, true));
     auto mainTid = thisTid;
     auto window = new Window(scene, 800, 600, (int key, int, int action, int) {
         if (key == 'A')
@@ -113,8 +163,6 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             new Thread({
                 try
                 {
-                    import std.random;
-
                     auto cube = cubeSlow("image1.jpg", uniform(0, 10), 0, 0, 0.05, false);
                     mainTid.send(cast(shared) { observer.addChild(cube); });
                 }
@@ -124,6 +172,11 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
                 }
             }).start();
         }
+        if ((key == '2') && (action == GLFW_RELEASE))
+        {
+            spawn(&add100Nodes, cast(shared)observer);
+        }
+
     });
 
     PrintVisitor v = new PrintVisitor();

@@ -7,3 +7,9 @@ rendering) thread). For that each Node is either part of a scene
 connected to a renderthread or not. If it is not (yet) connected, one
 can do all the changes however one wants, if it is connected the
 changes need to be done in the renderThread.
+
+
+* TODOS
+** TODO remove jpgs from git repository
+** TODO implement image viewer
+
