@@ -1,7 +1,7 @@
 // https://www.iquilezles.org/www/index.htm
 // http://www.songho.ca/opengl/gl_sphere.html
 
-module sg;
+module sg.sg;
 
 import automem;
 import optional;
@@ -10,7 +10,7 @@ import std.math;
 import std.stdio;
 import std.string;
 import std.typecons : BitFlags;
-import window;
+import sg.window;
 
 public import gl3n.linalg;
 public import imagefmt;
@@ -176,6 +176,10 @@ class ProjectionNode : Node
     {
         v.visit(this);
     }
+    auto getProjection() {
+        ensureRenderThread;
+        return projection;
+    }
 }
 
 abstract class Projection
@@ -230,6 +234,11 @@ class Observer : ProjectionNode
         v.visit(this);
     }
 
+    auto getPosition() {
+        ensureRenderThread;
+        return position;
+    }
+
     mat4 getCameraTransformation()
     {
         // return mat4.look_at(vec3(0, 1, -10), vec3(0, 0, 0), vec3(0, 1, 0)).inverse;
@@ -277,6 +286,11 @@ class TransformationNode : Node
         v.visit(this);
     }
 
+    auto getTransformation() {
+        ensureRenderThread;
+        return transformation;
+    }
+
     auto setTransformation(mat4 transformation)
     {
         ensureRenderThread;
@@ -302,10 +316,10 @@ class Geometry : Node
 
 class TriangleArray : Geometry
 {
-    private Type type;
-    private vec3[] coordinates;
-    private vec4[] colors;
-    private vec2[] textureCoordinates;
+    Type type;
+    vec3[] coordinates;
+    vec4[] colors;
+    vec2[] textureCoordinates;
     // TODO normals
     this(string name, Type type, vec3[] coordinates, vec4[] colors, vec2[] textureCoordinates)
     {
@@ -328,13 +342,13 @@ class VertexData : Node
     }
 
     alias Components = BitFlags!Component;
-    private Components components;
-    private float[] data;
+    Components components;
+    float[] data;
 
-    private uint tupleSize;
-    private uint colorsOffset = 0;
-    private uint textureCoordinatesOffset = 0;
-    private uint normalsOffset = 0;
+    uint tupleSize;
+    uint colorsOffset = 0;
+    uint textureCoordinatesOffset = 0;
+    uint normalsOffset = 0;
 
     this(string name, Components components, uint size)
     {
@@ -401,9 +415,9 @@ class VertexData : Node
 
 class IndexedInterleavedTriangleArray : Geometry
 {
-    private Type type;
-    private VertexData data;
-    private uint[] indices;
+    Type type;
+    VertexData data;
+    uint[] indices;
     this(string name, Type type, VertexData data, uint[] indices)
     {
         super(name);
@@ -793,291 +807,3 @@ class Visitor
     }
 }
 
-class BehaviorVisitor : Visitor
-{
-    alias visit = Visitor.visit;
-    override void visit(Behavior n)
-    {
-        n.run();
-        foreach (child; n.childs)
-        {
-            child.accept(this);
-        }
-    }
-}
-
-class PrintVisitor : Visitor
-{
-    import std.stdio;
-
-    string indent = "";
-    override void visit(Node node)
-    {
-        writeNode("Node", node);
-    }
-
-    override void visit(Scene n)
-    {
-        writeNode("Scene", n);
-    }
-
-    override void visit(ProjectionNode n)
-    {
-        writeNode("ProjectonNode", n);
-    }
-
-    override void visit(Observer n)
-    {
-        writeNode("Observer", n, (string indent) => writeln(indent, "position=", n.position));
-    }
-
-    override void visit(TransformationNode n)
-    {
-        writeNode("TransformationNode", n);
-    }
-
-    override void visit(Shape n)
-    {
-        writeNode("Shape", n);
-    }
-
-    override void visit(Behavior n)
-    {
-        writeNode("Behavior", n);
-    }
-
-    private void writeNode(string type, Node node, void delegate(string) more = null)
-    {
-        writeln(indent, type);
-        const oldIndent = indent;
-        indent ~= "  ";
-        writeln(indent, "name=", node.name);
-        writeln(indent, "live=", node.live);
-        if (more)
-        {
-            more(indent);
-        }
-        writeln(indent, "#childs=", node.childs.length);
-        foreach (child; node.childs)
-        {
-            child.accept(this);
-        }
-        indent = oldIndent;
-    }
-}
-
-/++
- + https://austinmorlan.com/posts/opengl_matrices/
- + gl3n stores row major -> all matrices need to be transposed either
- + manually for opengl2 or with setting GL_TRUE when passing to a shader
- +/
-class OGL2RenderVisitor : Visitor
-{
-    import bindbc.opengl;
-
-    Window window;
-    this(Window window)
-    {
-        this.window = window;
-    }
-
-    override void visit(Node n)
-    {
-        foreach (child; n.childs)
-        {
-            child.accept(this);
-        }
-    }
-
-    override void visit(Scene n)
-    {
-        n.ensureRenderThread;
-
-        glClearColor(0, 0, 0, 1);
-        glColor3f(1, 1, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glFrontFace(GL_CCW);
-        glCullFace(GL_BACK);
-        glEnable(GL_CULL_FACE);
-        // glDisable(GL_CULL_FACE);
-        glDisable(GL_DITHER);
-        glDisable(GL_DEPTH_TEST);
-        //  glDepthFunc(GL_LESS);
-        glDisable(GL_LIGHTING);
-        //      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-        glViewport(0, 0, window.getWidth, window.getHeight);
-
-        visit(cast(Node)(n));
-    }
-
-    override void visit(ProjectionNode n)
-    {
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glMultMatrixf(n.projection.getProjectionMatrix(window.getWidth,
-                window.getHeight).transposed.value_ptr);
-
-        glMatrixMode(GL_MODELVIEW);
-        visit(cast(Node) n);
-    }
-
-    override void visit(Observer n)
-    {
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        glMultMatrixf(n.getCameraTransformation.transposed.value_ptr);
-
-        visit(cast(ProjectionNode) n);
-    }
-
-    override void visit(TransformationNode n)
-    {
-        glPushMatrix();
-        glMultMatrixf(n.transformation.transposed.value_ptr);
-        foreach (child; n.childs)
-        {
-            child.accept(this);
-        }
-        glPopMatrix();
-    }
-
-    class TextureName : CustomData
-    {
-        Tid renderThread;
-        GLuint textureName;
-        this(Tid renderThread, GLuint textureName)
-        {
-            this.renderThread = renderThread;
-            this.textureName = textureName;
-        }
-
-        override void cleanup()
-        {
-            renderThread.send(cast(shared)() {
-                glDeleteTextures(1, &textureName);
-            });
-        }
-    }
-
-    private TextureName createAndLoadTexture(Texture texture)
-    {
-        auto image = texture.image;
-        GLuint textureName;
-        glGenTextures(1, &textureName);
-        checkOglError();
-        glBindTexture(GL_TEXTURE_2D, textureName);
-        checkOglError();
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        checkOglError();
-        glTexImage2D(GL_TEXTURE_2D, // target
-                0, // level
-                GL_RGB, // internalFormat
-                image.w, // width
-                image.h, // height
-                0, // border
-                GL_RGB, // format
-                GL_UNSIGNED_BYTE, // type
-                image.buf8.ptr // pixels
-                );
-        checkOglError();
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-        checkOglError();
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        checkOglError();
-        auto result = new TextureName(thisTid, textureName);
-        texture.customData = result;
-        return result;
-    }
-
-    private void activate(Texture texture)
-    {
-        glEnable(GL_TEXTURE_2D);
-        checkOglError();
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.wrapS ? GL_REPEAT : GL_CLAMP);
-        checkOglError();
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
-        checkOglError();
-        // dfmt off
-        auto textureName = cast(TextureName) texture.customData is null ?
-            createAndLoadTexture(texture)
-            : cast(TextureName) texture.customData;
-        // dfmt on
-        glBindTexture(GL_TEXTURE_2D, textureName.textureName);
-        checkOglError();
-    }
-
-    override void visit(Shape n)
-    {
-        if (auto appearance = n.appearance)
-        {
-            activate(appearance.textures[0]);
-        }
-
-        /+ immediate mode
-        if (auto triangleArray = cast(TriangleArray) n.geometry)
-        {
-            glBegin(GL_TRIANGLES);
-            for (int i = 0; i < triangleArray.coordinates.length; ++i)
-            {
-                auto color = triangleArray.colors[i];
-                auto coordinates = triangleArray.coordinates[i];
-
-                if (triangleArray.textureCoordinates.length > i)
-                {
-                    auto textureCoordinates = triangleArray.textureCoordinates[i];
-                    glTexCoord2f(textureCoordinates.x, textureCoordinates.y);
-                }
-                glColor3f(color.x, color.y, color.z);
-                glVertex3f(coordinates.x, coordinates.y, coordinates.z);
-            }
-            glEnd();
-        }
-        +/
-        if (auto g = cast(TriangleArray) n.geometry)
-        {
-            glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
-            {
-                glEnableClientState(GL_VERTEX_ARRAY);
-                glVertexPointer(3, GL_FLOAT, 0, g.coordinates.ptr);
-
-                glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
-
-                glEnableClientState(GL_COLOR_ARRAY);
-                glColorPointer(4, GL_FLOAT, 0, g.colors.ptr);
-
-                glDrawArrays(GL_TRIANGLES, 0, cast(int) g.coordinates.length);
-            }
-            glPopClientAttrib();
-        }
-
-        if (auto g = cast(IndexedInterleavedTriangleArray) n.geometry)
-        {
-            int stride = cast(int)(g.data.tupleSize * float.sizeof);
-            glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
-            {
-                glEnableClientState(GL_VERTEX_ARRAY);
-                glVertexPointer(3, GL_FLOAT, stride, g.data.data.ptr);
-
-                glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                glTexCoordPointer(2, GL_FLOAT, stride,
-                        g.data.data.ptr + g.data.textureCoordinatesOffset);
-
-                if (g.data.components.COLORS)
-                {
-                    glEnableClientState(GL_COLOR_ARRAY);
-                    glColorPointer(4, GL_FLOAT, stride, g.data.data.ptr + g.data.colorsOffset);
-                }
-                glDrawElements(GL_TRIANGLES, cast(int) g.indices.length,
-                        GL_UNSIGNED_INT, g.indices.ptr);
-            }
-            glPopClientAttrib();
-        }
-    }
-
-    override void visit(Behavior n)
-    {
-    }
-}

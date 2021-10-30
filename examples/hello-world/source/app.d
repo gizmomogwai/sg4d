@@ -8,6 +8,9 @@ import std.random;
 import std.stdio;
 import std.string;
 
+import sg;
+import sg.window;
+
 static struct Args
 {
     enum Projection
@@ -23,7 +26,7 @@ static struct Args
 }
 
 import sg;
-import window;
+import sg.window;
 
 auto cube(string name, Texture texture, float x, float y, float z, float rotationSpeed, bool indexed)
 {

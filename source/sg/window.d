@@ -1,4 +1,4 @@
-module window;
+module sg.window;
 import std;
 import sg;
 
