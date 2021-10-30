@@ -2,15 +2,18 @@
 // http://www.songho.ca/opengl/gl_sphere.html
 
 module sg;
+
+import automem;
+import optional;
+import std.concurrency;
+import std.math;
 import std.stdio;
 import std.string;
-import std.math;
-import std.typecons;
+import std.typecons : BitFlags;
 import window;
-import std.concurrency : Tid;
+
 public import gl3n.linalg;
 public import imagefmt;
-import optional;
 
 void checkOglError()
 {
@@ -38,9 +41,18 @@ class Node
     {
         name = _name;
     }
-    auto getName() {
+
+    auto getChild(size_t idx)
+    {
+        ensureRenderThread;
+        return childs[idx];
+    }
+
+    auto getName()
+    {
         return name;
     }
+
     void ensureRenderThread()
     {
         oc(scene).ensureRenderThread;
@@ -55,6 +67,26 @@ class Node
     {
         ensureRenderThread;
         childs ~= n;
+        if (!scene.empty)
+        {
+            n.setScene(scene.front);
+        }
+    }
+
+    size_t childCount()
+    {
+        ensureRenderThread;
+        return childs.length;
+    }
+
+    void replaceChild(size_t idx, Node n)
+    {
+        ensureRenderThread;
+        if (idx >= childs.length)
+        {
+            throw new Exception("index out of bounds");
+        }
+        childs[idx] = n;
         if (!scene.empty)
         {
             n.setScene(scene.front);
@@ -348,6 +380,10 @@ class VertexData : Node
 
     void setColor(uint idx, float r, float g, float b, float a = 1.0f)
     {
+        if (!components.COLORS)
+        {
+            throw new Exception("colors not specified");
+        }
         ensureRenderThread;
         data[idx * tupleSize + colorsOffset + 0] = r;
         data[idx * tupleSize + colorsOffset + 1] = g;
@@ -387,7 +423,6 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
               new VertexData(name,
                   VertexData.Components(
                       VertexData.Component.VERTICES,
-                      VertexData.Component.COLORS,
                       VertexData.Component.TEXTURE_COORDINATES
                   ), 8),
               [
@@ -416,14 +451,14 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
         data.setVertex(6,  s,  s,  s);
         data.setVertex(7, -s,  s,  s);
 
-        data.setColor(0, 0, 0, 0);
-        data.setColor(1, 1, 0, 0);
-        data.setColor(2, 1, 1, 0);
-        data.setColor(3, 0, 1, 0);
-        data.setColor(4, 0, 1, 1);
-        data.setColor(5, 0, 0, 1);
-        data.setColor(6, 1, 0, 1);
-        data.setColor(7, 1, 1, 1);
+        // data.setColor(0, 0, 0, 0);
+        // data.setColor(1, 1, 0, 0);
+        // data.setColor(2, 1, 1, 0);
+        // data.setColor(3, 0, 1, 0);
+        // data.setColor(4, 0, 1, 1);
+        // data.setColor(5, 0, 0, 1);
+        // data.setColor(6, 1, 0, 1);
+        // data.setColor(7, 1, 1, 1);
 
         data.setTextureCoordinate(0, 0, 0);
         data.setTextureCoordinate(1, 1, 0);
@@ -611,32 +646,51 @@ class TriangleArrayCube : TriangleArray
     }
 }
 
-class Appearance
+alias Textures = Vector!Texture;
+class Appearance : Node
 {
-    Texture[] textures;
-    this(Texture[] textures)
+    Textures textures;
+    this(Textures textures)
     {
+        super("app");
         this.textures = textures;
+    }
+
+    void setTexture(size_t index, Texture t)
+    {
+        this.textures[index] = t;
     }
 }
 
 class CustomData
 {
+    abstract void cleanup();
 }
 
-class Texture
+class _Texture
 {
     IFImage image;
     bool wrapS;
     bool wrapT;
-    CustomData customData;
+    CustomData customData = null;
     this(IFImage image, bool wrapS = false, bool wrapT = false)
     {
         this.image = image;
         this.wrapS = wrapS;
         this.wrapT = wrapT;
     }
+
+    ~this()
+    {
+        if (customData)
+        {
+            customData.cleanup;
+            customData = null;
+        }
+    }
 }
+
+alias Texture = RefCounted!(_Texture);
 
 class Shape : Node
 {
@@ -652,6 +706,24 @@ class Shape : Node
     override void accept(Visitor v)
     {
         v.visit(this);
+    }
+
+    auto getAppearance()
+    {
+        ensureRenderThread;
+        return appearance;
+    }
+
+    auto getGeometry()
+    {
+        ensureRenderThread;
+        return geometry;
+    }
+
+    void setAppearance(Appearance appearance)
+    {
+        ensureRenderThread;
+        this.appearance = appearance;
     }
 }
 
@@ -799,7 +871,7 @@ class PrintVisitor : Visitor
  + gl3n stores row major -> all matrices need to be transposed either
  + manually for opengl2 or with setting GL_TRUE when passing to a shader
  +/
-class OGLRenderVisitor : Visitor
+class OGL2RenderVisitor : Visitor
 {
     import bindbc.opengl;
 
@@ -820,6 +892,7 @@ class OGLRenderVisitor : Visitor
     override void visit(Scene n)
     {
         n.ensureRenderThread;
+
         glClearColor(0, 0, 0, 1);
         glColor3f(1, 1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -871,15 +944,19 @@ class OGLRenderVisitor : Visitor
 
     class TextureName : CustomData
     {
+        Tid renderThread;
         GLuint textureName;
-        this(GLuint textureName)
+        this(Tid renderThread, GLuint textureName)
         {
+            this.renderThread = renderThread;
             this.textureName = textureName;
         }
 
-        ~this()
+        override void cleanup()
         {
-            // TODO delete texture in ogl context
+            renderThread.send(cast(shared)() {
+                glDeleteTextures(1, &textureName);
+            });
         }
     }
 
@@ -895,7 +972,7 @@ class OGLRenderVisitor : Visitor
         checkOglError();
         glTexImage2D(GL_TEXTURE_2D, // target
                 0, // level
-                GL_RGB, // internalFOrmat
+                GL_RGB, // internalFormat
                 image.w, // width
                 image.h, // height
                 0, // border
@@ -908,7 +985,7 @@ class OGLRenderVisitor : Visitor
         checkOglError();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         checkOglError();
-        auto result = new TextureName(textureName);
+        auto result = new TextureName(thisTid, textureName);
         texture.customData = result;
         return result;
     }
@@ -922,9 +999,11 @@ class OGLRenderVisitor : Visitor
         checkOglError();
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
         checkOglError();
-
-        auto textureName = cast(TextureName) texture.customData is null
-            ? createAndLoadTexture(texture) : cast(TextureName) texture.customData;
+        // dfmt off
+        auto textureName = cast(TextureName) texture.customData is null ?
+            createAndLoadTexture(texture)
+            : cast(TextureName) texture.customData;
+        // dfmt on
         glBindTexture(GL_TEXTURE_2D, textureName.textureName);
         checkOglError();
     }
@@ -933,13 +1012,7 @@ class OGLRenderVisitor : Visitor
     {
         if (auto appearance = n.appearance)
         {
-            if (appearance.textures != null)
-            {
-                if (appearance.textures.length > 0)
-                {
-                    activate(appearance.textures[0]);
-                }
-            }
+            activate(appearance.textures[0]);
         }
 
         /+ immediate mode
@@ -992,9 +1065,11 @@ class OGLRenderVisitor : Visitor
                 glTexCoordPointer(2, GL_FLOAT, stride,
                         g.data.data.ptr + g.data.textureCoordinatesOffset);
 
-                glEnableClientState(GL_COLOR_ARRAY);
-                glColorPointer(4, GL_FLOAT, stride, g.data.data.ptr + g.data.colorsOffset);
-
+                if (g.data.components.COLORS)
+                {
+                    glEnableClientState(GL_COLOR_ARRAY);
+                    glColorPointer(4, GL_FLOAT, stride, g.data.data.ptr + g.data.colorsOffset);
+                }
                 glDrawElements(GL_TRIANGLES, cast(int) g.indices.length,
                         GL_UNSIGNED_INT, g.indices.ptr);
             }

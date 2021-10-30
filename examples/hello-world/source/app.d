@@ -1,10 +1,12 @@
-import std.stdio;
-import core.thread;
-import std.conv;
-import std.string;
-import std.concurrency;
 import argparse;
+import automem;
+import core.thread;
+import std.concurrency;
+import std.conv;
+import std.file;
 import std.random;
+import std.stdio;
+import std.string;
 
 static struct Args
 {
@@ -16,6 +18,8 @@ static struct Args
 
     @(NamedArgument().Required())
     Projection projection;
+    @NamedArgument()
+    string directory = ".";
 }
 
 import sg;
@@ -31,7 +35,7 @@ auto cube(string name, Texture texture, float x, float y, float z, float rotatio
                   indexed ?
                       new IndexedInterleavedCube("cube(size=1)", 1)
                       : new TriangleArrayCube("cube", 1),
-                  new Appearance([texture])
+                  new Appearance(Textures(texture))
         );
     // dfmt on
     rotation.addChild(shape);
@@ -55,7 +59,7 @@ auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bo
     auto translation = new TransformationNode("translation-" ~ textureFile,
             mat4.translation(x, y, z));
     auto rotation = new TransformationNode("rotation-" ~ textureFile, mat4.identity());
-    IFImage image = read_image(textureFile, 3);
+    auto image = read_image(textureFile, 3);
     if (image.e)
     {
         throw new Exception("%s".format(IF_ERROR[image.e]));
@@ -66,7 +70,7 @@ auto cube(string textureFile, float x, float y, float z, float rotationSpeed, bo
                   indexed ?
                       new IndexedInterleavedCube("cube(size=1)", 1)
                       : new TriangleArrayCube("cube", 1),
-                  new Appearance([new Texture(image)])
+                  new Appearance(Textures(Texture(image)))
         );
     // dfmt on
     rotation.addChild(shape);
@@ -104,10 +108,11 @@ Projection toProjection(Args.Projection projection)
     }
 }
 
-void add100Nodes(shared(Node) observer) {
+void add100Nodes(shared(Node) observer)
+{
     try
     {
-        auto t = new Texture(read_image("image1.jpg"));
+        auto t = Texture(read_image("image1.jpg"));
         // dfmt off
         foreach (i; 0 .. 100)
         {
@@ -124,13 +129,72 @@ void add100Nodes(shared(Node) observer) {
     }
 }
 
+class Files
+{
+    import std.array;
+
+    DirEntry[] files;
+    int currentIndex;
+    this(string directory)
+    {
+        files = std.file.dirEntries(directory, "*.jpg", SpanMode.shallow).array;
+        if (files.length == 0)
+        {
+            throw new Exception("no jpg files found");
+        }
+        currentIndex = 0;
+    }
+
+    bool empty()
+    {
+        return currentIndex < files.length;
+    }
+
+    auto front()
+    {
+        return files[currentIndex];
+    }
+
+    void popFront()
+    {
+        currentIndex++;
+        if (currentIndex == files.length)
+        {
+            currentIndex = 0;
+        }
+    }
+}
+
+void showNextImage(DirEntry nextFile, shared(Node) observer)
+{
+    try
+    {
+        auto i = read_image(nextFile.name);
+        if (i.e)
+        {
+            throw new Exception("Cannot read " ~ nextFile.name);
+        }
+        ownerTid.send(cast(shared) {
+            auto o = cast() observer;
+            (cast(Shape) o.getChild(0).getChild(0).getChild(0)).getAppearance()
+                .setTexture(0, Texture(i));
+        });
+    }
+    catch (Exception e)
+    {
+        writeln(e);
+    }
+}
+
 mixin Main.parseCLIArgs!(Args, (Args args) {
+
+    auto files = new Files(args.directory);
     auto scene = new Scene("scene");
     auto projection = args.projection.toProjection;
     auto observer = new Observer("observer", projection);
     scene.addChild(observer);
-    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.001, false));
-    observer.addChild(cube("image2.jpg", 3, 0, 0, 0.002, true));
+    observer.addChild(cube("image1.jpg", 0, 0, 0, 0.0001, true));
+
     auto mainTid = thisTid;
     auto window = new Window(scene, 800, 600, (int key, int, int action, int) {
         if (key == 'A')
@@ -158,6 +222,11 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             scene.accept(new PrintVisitor());
             return;
         }
+        if ((key == 'N') && (action == GLFW_RELEASE))
+        {
+            files.popFront;
+            spawn(&showNextImage, files.front, cast(shared) observer);
+        }
         if ((key == '1') && (action == GLFW_RELEASE))
         {
             new Thread({
@@ -174,7 +243,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         }
         if ((key == '2') && (action == GLFW_RELEASE))
         {
-            spawn(&add100Nodes, cast(shared)observer);
+            spawn(&add100Nodes, cast(shared) observer);
         }
 
     });
@@ -182,7 +251,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     PrintVisitor v = new PrintVisitor();
     scene.accept(v);
 
-    Visitor[] visitors = [new OGLRenderVisitor(window), new BehaviorVisitor()];
+    Visitor[] visitors = [new OGL2RenderVisitor(window), new BehaviorVisitor()];
 
     while (!glfwWindowShouldClose(window.window))
     {
