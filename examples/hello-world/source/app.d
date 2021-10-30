@@ -1,15 +1,14 @@
 import argparse;
 import automem;
 import core.thread;
+import sg.window;
+import sg;
 import std.concurrency;
 import std.conv;
 import std.file;
 import std.random;
 import std.stdio;
 import std.string;
-
-import sg;
-import sg.window;
 
 static struct Args
 {
@@ -24,9 +23,6 @@ static struct Args
     @NamedArgument()
     string directory = ".";
 }
-
-import sg;
-import sg.window;
 
 auto cube(string name, Texture texture, float x, float y, float z, float rotationSpeed, bool indexed)
 {

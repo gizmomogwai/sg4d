@@ -1,3 +1,5 @@
+#+TODO: TODO IN-PROGRESS | DONE
+
 * Simple scene graph (ala Java3D) for dlang
 
 ** Threading
@@ -11,16 +13,19 @@ changes need to be done in the renderThread.
 
 * TODOS
 ** TODO remove jpgs from git repository
-** TODO implement image viewer
+** IN-PROGRESS implement image viewer
 
-* DONE add camera
+** DONE add camera
   CLOSED: [2021-10-19 Tue 22:51]
   - CLOSING NOTE [2021-10-19 Tue 22:51]
-* DONE use cast(Camera)projection
+** DONE use cast(Camera)projection
   CLOSED: [2021-10-19 Tue 22:51]
   - CLOSING NOTE [2021-10-19 Tue 22:51]
-* TODO add observer movements with camera
+** DONE add observer movements with camera
+  CLOSED: [2021-10-31 Sun 01:29]
+  - CLOSING NOTE [2021-10-31 Sun 01:29]
   was momentan da ist ist nicht korrekt ...
   observer hat position und rotation + projection
-  
-* TODO play around with std.concurrency and render and sg updatethreads
+** DONE play around with std.concurrency and render and sg updatethreads
+  CLOSED: [2021-10-31 Sun 01:29]
+  - CLOSING NOTE [2021-10-31 Sun 01:29]
