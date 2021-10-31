@@ -1,0 +1,9 @@
+name "automem-test"
+description "Play around with automem."
+authors "Christian Koestlin"
+copyright "Copyright (c) 2021, Christian Koestlin"
+license "MIT"
+
+targetPath "out"
+
+dependency "sg4d" path="../.."

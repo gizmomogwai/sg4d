@@ -127,6 +127,13 @@ class Node
     {
         return !scene.empty;
     }
+    /// Can be called if one wants to cleanup manually (and earlier
+    /// than the gc)
+    void free() {
+        foreach (child; childs) {
+            child.free;
+        }
+    }
 }
 
 class Scene : Node
@@ -674,11 +681,14 @@ class Appearance : Node
     {
         this.textures[index] = t;
     }
+    override void free() {
+        textures.free;
+    }
 }
 
 class CustomData
 {
-    abstract void cleanup();
+    abstract void free();
 }
 
 class _Texture
@@ -698,7 +708,7 @@ class _Texture
     {
         if (customData)
         {
-            customData.cleanup;
+            customData.free;
             customData = null;
         }
     }
@@ -738,6 +748,10 @@ class Shape : Node
     {
         ensureRenderThread;
         this.appearance = appearance;
+    }
+    override void free() {
+        appearance.free;
+        geometry.free;
     }
 }
 

@@ -175,8 +175,15 @@ void showNextImage(DirEntry nextFile, shared(Node) observer)
         }
         ownerTid.send(cast(shared) {
             auto o = cast() observer;
-            (cast(Shape) o.getChild(0).getChild(0).getChild(0)).getAppearance()
-                .setTexture(0, Texture(i));
+            auto shape = (cast(Shape) o.getChild(0).getChild(0).getChild(0));
+
+            // replace reference counted texture
+            shape..getAppearance().setTexture(0, Texture(i));
+            /+
+             // free appearance manually and set a new one
+            shape.getAppearance().free;
+            shape.setAppearance(new Appearance(Textures(Texture(i))));
+            +/
         });
     }
     catch (Exception e)
@@ -186,7 +193,6 @@ void showNextImage(DirEntry nextFile, shared(Node) observer)
 }
 
 mixin Main.parseCLIArgs!(Args, (Args args) {
-
     auto files = new Files(args.directory);
     auto scene = new Scene("scene");
     auto projection = args.projection.toProjection;

@@ -163,9 +163,10 @@ class OGL2RenderVisitor : Visitor
             this.textureName = textureName;
         }
 
-        override void cleanup()
+        override void free()
         {
             renderThread.send(cast(shared)() {
+                    import std.stdio; writeln("freeing texture ", textureName);
                 glDeleteTextures(1, &textureName);
             });
         }
