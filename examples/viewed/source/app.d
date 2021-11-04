@@ -79,19 +79,22 @@ Shape createTile(string filename, IFImage i)
     // dfmt on
 }
 
-void showNextImage(Tid tid, DirEntry nextFile, shared(Node) observer)
-{
+void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, shared(Observer) observer) {
     try
     {
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read " ~ nextFile.name);
 
         tid.send(cast(shared) {
+                try {
             currentImageDimension = vec2(i.w, i.h);
             auto o = cast() observer;
+            (cast(ParallelProjection)(o.getProjection())).zoom =
+                min(windowSize.x.to!float / currentImageDimension.x,
+                    windowSize.y.to!float / currentImageDimension.y);
             if (o.childs.length > 0)
             {
-                auto shape = (cast(Shape) o.getChild(0).getChild(0).getChild(0));
+                auto shape = (cast(Shape) o.getChild(0));
                 shape.getAppearance().free;
                 o.replaceChild(0, createTile(nextFile.name, i));
             }
@@ -99,12 +102,20 @@ void showNextImage(Tid tid, DirEntry nextFile, shared(Node) observer)
             {
                 o.addChild(createTile(nextFile.name, i));
             }
+                } catch (Exception e) {
+                    writeln(e);
+                }
         });
     }
     catch (Exception e)
     {
         writeln(e);
     }
+}
+
+void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile, shared(Observer) observer)
+{
+    loadNextImage(ownerTid, windowSize, nextFile, observer);
 }
 
 void doZoom(int input, int key, ref float zoom, float newZoom, Observer observer, int action)
@@ -218,7 +229,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         if ((key == 'N') && (action == GLFW_RELEASE))
         {
             files.popFront;
-            spawn(&showNextImage, ownerTid, files.front, cast(shared) observer);
+            spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front, cast(shared) observer);
             return;
         }
         doZoom(key, '1', zoom, 1.0 / 16, observer, action);
@@ -235,7 +246,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
 
     auto v = new PrintVisitor();
     scene.accept(v);
-    showNextImage(thisTid, files.front, cast(shared) observer);
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front, cast(shared) observer);
 
     auto visitors = [new OGL2RenderVisitor(window), new BehaviorVisitor()];
 
