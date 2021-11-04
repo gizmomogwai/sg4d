@@ -6,6 +6,7 @@ module sg.sg;
 import automem;
 import optional;
 import std.concurrency;
+import std.exception;
 import std.math;
 import std.stdio;
 import std.string;
@@ -129,8 +130,10 @@ class Node
     }
     /// Can be called if one wants to cleanup manually (and earlier
     /// than the gc)
-    void free() {
-        foreach (child; childs) {
+    void free()
+    {
+        foreach (child; childs)
+        {
             child.free;
         }
     }
@@ -160,12 +163,7 @@ class Scene : Node
     {
         if (!renderThread.empty)
         {
-            import std.concurrency;
-
-            if (thisTid != renderThread)
-            {
-                throw new Exception("methods on live object called from wrong thread");
-            }
+            enforce(thisTid == renderThread, "methods on live object called from wrong thread");
         }
     }
 }
@@ -183,9 +181,18 @@ class ProjectionNode : Node
     {
         v.visit(this);
     }
-    auto getProjection() {
+
+    auto getProjection()
+    {
         ensureRenderThread;
         return projection;
+    }
+
+    auto setProjection(Projection p)
+    {
+        ensureRenderThread;
+        this.projection = p;
+        return this;
     }
 }
 
@@ -202,16 +209,23 @@ abstract class Projection
     abstract mat4 getProjectionMatrix(int width, int height);
 }
 
+/++
+ + Parallel Projection. Normally the projection is setup in a way that
+ + one unit in world space maps to one pixel. This can be changed by
+ + zoom. E.g. zoom factor 2 maps one unit in world coordinates to two pixels
+ +/
 class ParallelProjection : Projection
 {
-    this(float near, float far)
+    float zoom;
+    this(float near, float far, float zoom)
     {
         super(near, far);
+        this.zoom = zoom;
     }
 
     override mat4 getProjectionMatrix(int width, int height)
     {
-        return mat4.orthographic(-width / 2, width / 2, -height / 2, height / 2, near, far);
+        return mat4.orthographic(0, width / zoom, 0, height / zoom, near, far);
     }
 }
 
@@ -241,9 +255,17 @@ class Observer : ProjectionNode
         v.visit(this);
     }
 
-    auto getPosition() {
+    auto getPosition()
+    {
         ensureRenderThread;
         return position;
+    }
+
+    auto setPosition(vec3 position)
+    {
+        ensureRenderThread;
+        this.position = position;
+        return this;
     }
 
     mat4 getCameraTransformation()
@@ -253,7 +275,7 @@ class Observer : ProjectionNode
         // return mat4.look_at(position, vec3(0, 0, 0), vec3(0, 1, 0));
     }
 
-    enum delta = 1;
+    enum delta = 10;
     void forward()
     {
         ensureRenderThread;
@@ -264,18 +286,6 @@ class Observer : ProjectionNode
     {
         ensureRenderThread;
         position.z += delta;
-    }
-
-    void strafeLeft()
-    {
-        ensureRenderThread;
-        position.x -= delta;
-    }
-
-    void strafeRight()
-    {
-        ensureRenderThread;
-        position.x += delta;
     }
 }
 
@@ -293,7 +303,8 @@ class TransformationNode : Node
         v.visit(this);
     }
 
-    auto getTransformation() {
+    auto getTransformation()
+    {
         ensureRenderThread;
         return transformation;
     }
@@ -360,12 +371,25 @@ class VertexData : Node
     this(string name, Components components, uint size)
     {
         super(name);
+        init(components, size);
+        data = new float[tupleSize * size];
+    }
+
+    this(string name, Components components, uint size, float[] data)
+    {
+        super(name);
+        init(components, size);
+        enforce(data.length == (tupleSize * size),
+                "Expected %s float, but got %s floats".format(tupleSize * size, data.length));
+        this.data = data;
+    }
+
+    private void init(Components components, uint size)
+    {
         this.components = components;
         uint offset = 0;
-        if (components.VERTICES == false)
-        {
-            throw new Exception("At least vertices need to be given");
-        }
+        enforce(components.VERTICES, "At least vertices need to be given");
+
         tupleSize = 3;
         offset += 3;
         if (components.COLORS)
@@ -388,7 +412,6 @@ class VertexData : Node
             normalsOffset = offset;
             offset += 3;
         }
-        data = new float[tupleSize * size];
     }
 
     void setVertex(uint idx, float x, float y, float z)
@@ -401,10 +424,8 @@ class VertexData : Node
 
     void setColor(uint idx, float r, float g, float b, float a = 1.0f)
     {
-        if (!components.COLORS)
-        {
-            throw new Exception("colors not specified");
-        }
+        enforce(components.COLORS, "colors not specified");
+
         ensureRenderThread;
         data[idx * tupleSize + colorsOffset + 0] = r;
         data[idx * tupleSize + colorsOffset + 1] = g;
@@ -681,7 +702,9 @@ class Appearance : Node
     {
         this.textures[index] = t;
     }
-    override void free() {
+
+    override void free()
+    {
         textures.free;
     }
 }
@@ -749,7 +772,9 @@ class Shape : Node
         ensureRenderThread;
         this.appearance = appearance;
     }
-    override void free() {
+
+    override void free()
+    {
         appearance.free;
         geometry.free;
     }
@@ -820,4 +845,3 @@ class Visitor
         }
     }
 }
-

@@ -38,13 +38,18 @@ class Window
 {
     Scene scene;
     GLFWwindow* window;
-    private int width;
-    private int height;
+    int width;
+    int height;
     float xscale;
     float yscale;
-    void delegate(int key, int scancode, int action, int mods) keyCallback;
-    this(Scene scene, int width, int height, void delegate(int key, int scancode,
-            int action, int mods) keyCallback)
+    alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
+    KeyCallback keyCallback;
+    // dfmt off
+    this(Scene scene,
+         int width,
+         int height,
+         KeyCallback keyCallback)
+      // dfmt on
     {
         this.scene = scene;
         scene.bind(thisTid);
@@ -74,8 +79,9 @@ class Window
 
     void sizeCallback(int width, int height)
     {
-        this.width = width;
-        this.height = height;
+        this.width = cast(int)(width * xscale);
+        this.height = cast(int)(height * yscale);
+        writeln("width=", this.width, " height=", this.height);
     }
 
     int getWidth()
@@ -96,7 +102,7 @@ extern (C)
         try
         {
             Window w = cast(Window) glfwGetWindowUserPointer(window);
-            w.keyCallback(key, scancode, action, mods);
+            w.keyCallback(w, key, scancode, action, mods);
         }
         catch (Throwable t)
         {
