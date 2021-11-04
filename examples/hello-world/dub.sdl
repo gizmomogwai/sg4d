@@ -1,5 +1,5 @@
-name "hello-world"
-description "Hello world for sg4d."
+name "viewed"
+description "Simple sg4d based imageviewer."
 authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"

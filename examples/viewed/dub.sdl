@@ -1,9 +1,10 @@
-name "automem-test"
-description "Play around with automem."
+name "viewed"
+description "Simple sg4d based imageviewer."
 authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
 
-targetPath "out"
+targetPath "../../out"
 
+dependency "argparse" version="~>0.4.0"
 dependency "sg4d" path="../.."
