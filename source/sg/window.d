@@ -44,12 +44,7 @@ class Window
     float yscale;
     alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
     KeyCallback keyCallback;
-    // dfmt off
-    this(Scene scene,
-         int width,
-         int height,
-         KeyCallback keyCallback)
-      // dfmt on
+    this(Scene scene, int width, int height, KeyCallback keyCallback)
     {
         this.scene = scene;
         scene.bind(thisTid);
