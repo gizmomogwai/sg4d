@@ -253,7 +253,11 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     scene.accept(v);
     loadNextImage(thisTid, vec2(window.width, window.height), files.front, cast(shared) observer);
 
-    auto visitors = [new OGL2RenderVisitor(window), new BehaviorVisitor()];
+    import sg.visitors;
+
+    Visitor renderVisitor = new TheRenderVisitor(window);
+
+    auto visitors = [renderVisitor, new BehaviorVisitor(),];
 
     while (!glfwWindowShouldClose(window.window))
     {

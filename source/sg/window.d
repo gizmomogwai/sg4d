@@ -22,12 +22,26 @@ void loadBindBCGlfw()
 void loadBindBCOpenGL()
 {
     const result = loadOpenGL();
-    if (result == GLSupport.gl21)
+    writeln(result);
+    version (Default)
     {
+        if (result == GLSupport.gl21)
+        {
+        }
+        else
+        {
+            throw new Exception("need opengl 2.1 support");
+        }
     }
-    else
+    version (GL_33)
     {
-        throw new Exception("need opengl 2.1 support");
+        if (result == GLSupport.gl33)
+        {
+        }
+        else
+        {
+            throw new Exception("need opengl 3.3 support");
+        }
     }
 }
 
@@ -51,6 +65,13 @@ class Window
         this.keyCallback = keyCallback;
         loadBindBCGlfw();
         glfwInit();
+        version (GL_33)
+        {
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        }
         window = glfwCreateWindow(width, height, "test", null, null);
         glfwSetWindowUserPointer(window, cast(void*) this);
         glfwSetKeyCallback(window, &staticKeyCallback);
@@ -63,7 +84,10 @@ class Window
         writeln("OGLVendor:        ", glGetString(GL_VENDOR).to!string);
         writeln("OGLRenderer:      ", glGetString(GL_RENDERER).to!string);
         writeln("OGLVersion:       ", glGetString(GL_VERSION).to!string);
-        writeln("OGLExt:           ", glGetString(GL_EXTENSIONS).to!string);
+        version (Default)
+        {
+            writeln("OGLExt:           ", glGetString(GL_EXTENSIONS).to!string);
+        }
         writeln("MAX_TEXTURE_SIZE: ", glGetInt(GL_MAX_TEXTURE_SIZE).to!string);
     }
 

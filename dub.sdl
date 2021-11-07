@@ -9,8 +9,9 @@ targetPath "out"
 
 dependency "imagefmt" version="~>2.1.2"
 dependency "bindbc-glfw" version="~>1.0.0"
-versions "GLFW_33" "Default" "GL_ARB" "GL_AllowDeprecated"
-
+versions "GLFW_33" // newest GLFW
+// versions "Default" "GL_ARB" "GL_AllowDeprecated" // Opengl2.1
+// versions "GL_33"
 dependency "bindbc-opengl" version="~>1.0.0"
 dependency "gl3n" version=">=0.0.0"
 dependency "optional" version="~>1.3.0"
