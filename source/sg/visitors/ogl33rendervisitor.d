@@ -1,5 +1,8 @@
 module sg.visitors.ogl33rendervisitor;
 
+// http://www.lighthouse3d.com/tutorials/glsl-tutorial/hello-world/
+// https://learnopengl.com/Getting-started/Shaders
+
 version (GL_33)
 {
     import sg;
@@ -20,6 +23,8 @@ version (GL_33)
 
         GLuint shader;
         Type type;
+        GLuint[string] attributesCache;
+        GLuint[string] uniformsCache;
 
         this(Type type, string source)
         {
@@ -47,7 +52,7 @@ version (GL_33)
                 checkOglError;
 
                 auto errors = (InfoLog[0 .. logLen - 1]).to!string;
-                writeln("Error compiling shader: '%s'", errors);
+                success.enforce("Error compiling shader: '%s'".format(errors));
             }
         }
 
@@ -57,14 +62,27 @@ version (GL_33)
             checkOglError;
         }
     }
+
     // https://github.com/Circular-Studios/Dash/blob/develop/source/dash/graphics/shaders/glsl/package.d
     enum glslVersionSource = "#version 330 core\n";
 
     immutable string vertexShaderSource = glslVersionSource ~ q{
-        layout (location = 0) in vec3 vertex;
+        layout (location=0) in vec3 position;
+        uniform mat4 projection;
+        uniform mat4 modelView;
+        out vec4 outColor;
         void main()
         {
-            gl_Position = vec4(vertex, 1.0);
+            gl_Position = projection * modelView * vec4(position, 1.0);
+            outColor = vec4(1.0, 0.0, 0.0, 1.0);
+        }
+    };
+
+    immutable string fragmentShaderSource = glslVersionSource ~ q{
+        in vec4 inColor;
+        out vec4 outColor;
+        void main() {
+            outColor = inColor;
         }
     };
 
@@ -75,10 +93,12 @@ version (GL_33)
 
         Window window;
         Shader vertexShader;
+        Shader fragmentShader;
         this(Window window)
         {
             this.window = window;
             vertexShader = new Shader(Shader.Type.vertex, vertexShaderSource);
+            fragmentShader = new Shader(Shader.Type.fragment, fragmentShaderSource);
         }
 
         override void visit(Node n)

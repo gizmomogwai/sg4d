@@ -1,6 +1,9 @@
 // https://www.iquilezles.org/www/index.htm
 // http://www.songho.ca/opengl/gl_sphere.html
-
+// https://jsfiddle.net/tLyugeqw/14/
+// https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection
+// https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
+// http://www.lighthouse3d.com/tutorials/glsl-tutorial/hello-world/
 module sg.sg;
 
 import automem;

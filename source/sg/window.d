@@ -54,8 +54,6 @@ class Window
     GLFWwindow* window;
     int width;
     int height;
-    float xscale;
-    float yscale;
     alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
     KeyCallback keyCallback;
     this(Scene scene, int width, int height, KeyCallback keyCallback)
@@ -73,12 +71,15 @@ class Window
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         }
         window = glfwCreateWindow(width, height, "test", null, null);
-        glfwSetWindowUserPointer(window, cast(void*) this);
-        glfwSetKeyCallback(window, &staticKeyCallback);
-        glfwSetWindowSizeCallback(window, &staticSizeCallback);
-        glfwGetWindowContentScale(window, &xscale, &yscale);
-        staticSizeCallback(window, width, height);
-        glfwMakeContextCurrent(window);
+        window.glfwSetWindowUserPointer(cast(void*) this);
+        window.glfwSetKeyCallback(&staticKeyCallback);
+        window.glfwSetFramebufferSizeCallback(&staticSizeCallback);
+        window.glfwSetWindowSize(width, height);
+        int w, h;
+        window.glfwGetFramebufferSize(&w, &h);
+        staticSizeCallback(window, w, h);
+
+        window.glfwMakeContextCurrent();
         loadBindBCOpenGL();
         writeln("Use opengl");
         writeln("OGLVendor:        ", glGetString(GL_VENDOR).to!string);
@@ -98,19 +99,19 @@ class Window
 
     void sizeCallback(int width, int height)
     {
-        this.width = cast(int)(width * xscale);
-        this.height = cast(int)(height * yscale);
+        this.width = width;
+        this.height = height;
         writeln("width=", this.width, " height=", this.height);
     }
 
     int getWidth()
     {
-        return cast(int)(width * xscale);
+        return cast(int)(width);
     }
 
     int getHeight()
     {
-        return cast(int)(height * yscale);
+        return cast(int)(height);
     }
 }
 
@@ -120,7 +121,7 @@ extern (C)
     {
         try
         {
-            Window w = cast(Window) glfwGetWindowUserPointer(window);
+            auto w = cast(Window) window.glfwGetWindowUserPointer();
             w.keyCallback(w, key, scancode, action, mods);
         }
         catch (Throwable t)
@@ -132,7 +133,7 @@ extern (C)
     {
         try
         {
-            Window w = cast(Window) glfwGetWindowUserPointer(window);
+            auto w = cast(Window) glfwGetWindowUserPointer(window);
             w.sizeCallback(width, height);
         }
         catch (Throwable t)

@@ -36,7 +36,7 @@ version (Default)
         {
             n.ensureRenderThread;
 
-            glClearColor(0, 0, 0, 1);
+            glClearColor(1, 0, 0, 1);
             glColor3f(1, 1, 1);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             glFrontFace(GL_CCW);
@@ -49,17 +49,25 @@ version (Default)
             glDisable(GL_LIGHTING);
             //      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-            glViewport(0, 0, window.getWidth, window.getHeight);
+            glViewport(0, 0, window.getWidth(), window.getHeight());
 
             visit(cast(Node)(n));
         }
 
+        void debugMatrix(string msg, int which) {
+            mat4 m;
+            glGetFloatv(which, m.matrix[0].ptr);
+            checkOglError;
+            writeln(msg, m);
+        }
         override void visit(ProjectionNode n)
         {
             glMatrixMode(GL_PROJECTION);
             glLoadIdentity();
+            //debugMatrix("id", GL_PROJECTION_MATRIX);
             glMultMatrixf(n.getProjection.getProjectionMatrix(window.getWidth,
                     window.getHeight).transposed.value_ptr);
+            //debugMatrix("gl3n", GL_PROJECTION_MATRIX);
 
             glMatrixMode(GL_MODELVIEW);
             visit(cast(Node) n);
