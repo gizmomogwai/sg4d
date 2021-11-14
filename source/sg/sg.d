@@ -21,10 +21,35 @@ public import imagefmt;
 
 void checkOglError()
 {
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
+    string[] errors;
+    GLenum error = glGetError();
+    while (error != GL_NO_ERROR)
     {
-        throw new Exception("ogl error %s".format(err));
+        errors ~= "OGL error %s (%s)".format(error, glGetErrorString(error));
+        error = glGetError();
+    }
+    if (errors.length > 0) {
+        throw new Exception(errors.join("\n"));
+    }
+}
+
+
+private string glGetErrorString(GLenum error)
+{
+    switch(error)
+    {
+    case GL_INVALID_ENUM:
+        return "GL_INVALID_ENUM";
+    case GL_INVALID_VALUE:
+        return "GL_INVALID_VALUE";
+    case GL_INVALID_OPERATION:
+        return "GL_INVALID_OPERATION";
+    case GL_INVALID_FRAMEBUFFER_OPERATION:
+        return "GL_INVALID_FRAMEBUFFER_OPERATION";
+    case GL_OUT_OF_MEMORY:
+        return "GL_OUT_OF_MEMORY";
+    default:
+        throw new Exception("Unknown OpenGL error code %s".format(error));
     }
 }
 
@@ -41,6 +66,7 @@ class Node
     protected Optional!Scene scene;
     Node[] childs;
     private string name;
+    CustomData customData;
     this(string _name)
     {
         name = _name;
@@ -232,6 +258,18 @@ class ParallelProjection : Projection
     }
 }
 
+class IdentityProjection : Projection {
+    this()
+    {
+        super(1,2);
+    }
+
+    override mat4 getProjectionMatrix(int width, int height)
+    {
+        return mat4.identity();
+    }
+}
+
 class CameraProjection : Projection
 {
     this(float near, float far)
@@ -247,7 +285,7 @@ class CameraProjection : Projection
 
 class Observer : ProjectionNode
 {
-    private vec3 position = vec3(0, 0, 10);
+    private vec3 position = vec3(0, 0, 0);
     this(string name, Projection projection)
     {
         super(name, projection);
@@ -341,6 +379,7 @@ class TriangleArray : Geometry
     vec3[] coordinates;
     vec4[] colors;
     vec2[] textureCoordinates;
+
     // TODO normals
     this(string name, Type type, vec3[] coordinates, vec4[] colors, vec2[] textureCoordinates)
     {
@@ -515,6 +554,28 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
         data.setTextureCoordinate(6, 1, 1);
         data.setTextureCoordinate(7, 0, 1);
         // dfmt on
+    }
+}
+
+class Triangle : TriangleArray {
+    this(string name) {
+        super(name, Type.ARRAY,
+              [
+                  vec3(-0.5,-0.5,0.0),
+                  vec3(0.5,-0.5,0.0),
+                  vec3(0.0,0.5,0.0),
+              ],
+              [
+                  vec4(1.0, 0.0, 0.0, 1.0),
+                  vec4(0.0, 1.0, 0.0, 1.0),
+                  vec4(0.0, 0.0, 1.0, 1.0),
+              ],
+              [
+                  vec2(0.0, 0.0),
+                  vec2(1.0, 0.0),
+                  vec2(1.0, 1.0),
+              ],
+        );
     }
 }
 

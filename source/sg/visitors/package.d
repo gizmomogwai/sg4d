@@ -12,6 +12,7 @@ version (GL_33)
 {
     public import sg.visitors.ogl33rendervisitor : TheRenderVisitor = OGL33RenderVisitor;
 }
+
 class BehaviorVisitor : Visitor
 {
     alias visit = Visitor.visit;

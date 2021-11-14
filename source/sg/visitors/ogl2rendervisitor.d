@@ -10,10 +10,10 @@ version (Default)
 
     // opengl version till 2.1
     /++
- + https://austinmorlan.com/posts/opengl_matrices/
- + gl3n stores row major -> all matrices need to be transposed either
- + manually for opengl2 or with setting GL_TRUE when passing to a shader
- +/
+     + https://austinmorlan.com/posts/opengl_matrices/
+     + gl3n stores row major -> all matrices need to be transposed either
+     + manually for opengl2 or with setting GL_TRUE when passing to a shader
+     +/
     class OGL2RenderVisitor : Visitor
     {
         import bindbc.opengl;
@@ -58,17 +58,14 @@ version (Default)
             mat4 m;
             glGetFloatv(which, m.matrix[0].ptr);
             checkOglError;
-            writeln(msg, m);
+            writeln(msg, m.transposed.toPrettyString);
         }
         override void visit(ProjectionNode n)
         {
             glMatrixMode(GL_PROJECTION);
             glLoadIdentity();
-            //debugMatrix("id", GL_PROJECTION_MATRIX);
             glMultMatrixf(n.getProjection.getProjectionMatrix(window.getWidth,
                     window.getHeight).transposed.value_ptr);
-            //debugMatrix("gl3n", GL_PROJECTION_MATRIX);
-
             glMatrixMode(GL_MODELVIEW);
             visit(cast(Node) n);
         }
@@ -154,10 +151,10 @@ version (Default)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
             checkOglError();
             // dfmt off
-        auto textureName = cast(TextureName) texture.customData is null ?
-            createAndLoadTexture(texture)
-            : cast(TextureName) texture.customData;
-        // dfmt on
+            auto textureName = cast(TextureName) texture.customData is null ?
+                createAndLoadTexture(texture)
+                : cast(TextureName) texture.customData;
+            // dfmt on
             glBindTexture(GL_TEXTURE_2D, textureName.textureName);
             checkOglError();
         }
@@ -166,9 +163,8 @@ version (Default)
         {
             if (auto appearance = n.appearance)
             {
-                activate(appearance.textures[0]);
+//                activate(appearance.textures[0]);
             }
-
             /+ immediate mode
         if (auto triangleArray = cast(TriangleArray) n.geometry)
         {
@@ -196,8 +192,8 @@ version (Default)
                     glEnableClientState(GL_VERTEX_ARRAY);
                     glVertexPointer(3, GL_FLOAT, 0, g.coordinates.ptr);
 
-                    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                    glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
+  //                  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+//                    glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
 
                     glEnableClientState(GL_COLOR_ARRAY);
                     glColorPointer(4, GL_FLOAT, 0, g.colors.ptr);

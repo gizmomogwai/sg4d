@@ -8,5 +8,5 @@ targetPath "../../out"
 
 dependency "argparse" version="~>0.4.0"
 dependency "sg4d" path="../.."
-versions "GL_33"
-// versions "Default" "GL_ARB" "GL_AllowDeprecated"
+// versions "GL_33"
+versions "Default" "GL_ARB" "GL_AllowDeprecated"

@@ -147,7 +147,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
 
         void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
         {
-            auto windowSize = vec2(w.width, w.height);
+            auto windowSize = vec2(w.getWidth, w.getHeight);
             auto position = observer.getPosition.xy;
             auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
             auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
@@ -159,22 +159,22 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             auto scaledImage = imageDimension * zoom;
             auto position = observer.getPosition + vec3(dx, dy, 0);
 
-            if (scaledImage.x <= w.width)
+            if (scaledImage.x <= w.getWidth)
             {
-                position.x = (scaledImage.x - w.width) / 2.0 / zoom;
+                position.x = (scaledImage.x - w.getWidth) / 2.0 / zoom;
             }
             else
             {
-                position.x = clamp(position.x, 0, (scaledImage.x - w.width) / zoom);
+                position.x = clamp(position.x, 0, (scaledImage.x - w.getWidth) / zoom);
             }
 
-            if (scaledImage.y <= w.height)
+            if (scaledImage.y <= w.getHeight)
             {
-                position.y = (scaledImage.y - w.height) / 2.0 / zoom;
+                position.y = (scaledImage.y - w.getHeight) / 2.0 / zoom;
             }
             else
             {
-                position.y = clamp(position.y, 0, (scaledImage.y - w.height) / zoom);
+                position.y = clamp(position.y, 0, (scaledImage.y - w.getHeight) / zoom);
             }
             observer.setPosition(position);
         }

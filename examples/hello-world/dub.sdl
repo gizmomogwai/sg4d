@@ -16,5 +16,5 @@ configuration "opengl2" {
 
 configuration "opengl33" {
   targetPath "../../out/opengl33"
-  versions "GL33"
+  versions "GL_33"
 }

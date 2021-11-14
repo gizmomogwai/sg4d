@@ -10,10 +10,18 @@ connected to a renderthread or not. If it is not (yet) connected, one
 can do all the changes however one wants, if it is connected the
 changes need to be done in the renderThread.
 
-
 * TODOS
 ** TODO remove jpgs from git repository
 ** IN-PROGRESS implement image viewer
+** TODO continue opengl33
+** TODO framerate e.g. between opengl33 and opengl2
+** TODO show camera in scene from "outside"
+** TODO add ui (e.g. nuklear or imgui)
+** TODO opengl33 textures
+** TODO links to nice explanation
+** TODO praise learnopengl tutorial
+** TODO ask about reference counting
+** TODO make textures, normals and so on optional (or switch the vertex shader)
 
 ** DONE add camera
   CLOSED: [2021-10-19 Tue 22:51]
