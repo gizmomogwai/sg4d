@@ -112,20 +112,26 @@ version (GL_33)
 
         in vec3 position;
         in vec4 color;
+        in vec2 textureCoordinate;
 
         out vec4 vertexColor;
+        out vec2 vertexTextureCoordinate;
         void main()
         {
             gl_Position = projection * modelView * vec4(position, 1.0);
             vertexColor = color;
+            vertexTextureCoordinate = textureCoordinate;
         }
     };
 
     immutable string fragmentShaderSource = glslVersionSource ~ q{
         in vec4 vertexColor;
+        in vec2 vertexTextureCoordinate;
+        uniform sampler2D texture0;
+
         out vec4 fragmentColor;
         void main() {
-            fragmentColor = vertexColor;
+            fragmentColor = vertexColor * texture(texture0, vertexTextureCoordinate);
         }
     };
 
@@ -212,10 +218,12 @@ version (GL_33)
             VAO vao;
             VBO positions;
             VBO colors;
+            VBO textureCoordinates;
             this() {
                 vao = new VAO();
                 positions = new VBO();
                 colors = new VBO();
+                textureCoordinates = new VBO();
             }
             auto bind() {
                 vao.bind();
@@ -287,17 +295,87 @@ version (GL_33)
                 color.glEnableVertexAttribArray();
                 checkOglError;
 
+                buffers.textureCoordinates.bind.data(triangles.textureCoordinates);
+                auto textureCoordinate = program.getAttribute("textureCoordinate");
+                textureCoordinate.glVertexAttribPointer(2,
+                                                        GL_FLOAT,
+                                                        GL_FALSE,
+                                                        vec2.sizeof,
+                                                        cast(void*)0);
+                checkOglError;
+                textureCoordinate.glEnableVertexAttribArray();
+                checkOglError;
+
                 triangles.customData = buffers;
             }
+        }
+        class TextureName : CustomData
+        {
+            GLuint textureName;
+            this(GLuint textureName)
+            {
+                this.textureName = textureName;
+            }
+
+            override void free()
+            {
+            }
+        }
+
+        private TextureName createAndLoadTexture(Texture texture)
+        {
+            auto image = texture.image;
+            GLuint textureName;
+            glGenTextures(1, &textureName);
+            checkOglError();
+            glBindTexture(GL_TEXTURE_2D, textureName);
+            checkOglError();
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            checkOglError();
+            glTexImage2D(GL_TEXTURE_2D, // target
+                    0, // level
+                    GL_RGB, // internalFormat
+                    image.w, // width
+                    image.h, // height
+                    0, // border
+                    GL_RGB, // format
+                    GL_UNSIGNED_BYTE, // type
+                    image.buf8.ptr // pixels
+                    );
+            checkOglError();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            checkOglError();
+            auto result = new TextureName(textureName);
+            texture.customData = result;
+            return result;
+        }
+
+        private void activate(Texture texture)
+        {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.wrapS ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+            checkOglError();
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+            checkOglError();
+            // dfmt off
+            auto textureName = cast(TextureName) texture.customData is null ?
+                createAndLoadTexture(texture)
+                : cast(TextureName) texture.customData;
+            // dfmt on
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, textureName.textureName);
+            checkOglError();
         }
 
         override void visit(Shape n)
         {
+            program.setUniform("modelView", modelViewStack[$-1]);
+
             if (auto appearance = n.appearance)
             {
-                //    activate(appearance.textures[0]);
+                activate(appearance.textures[0]);
             }
-            program.setUniform("modelView", modelViewStack[$-1]);
+
             if (auto triangles = cast(TriangleArray) n.geometry)
             {
                 prepareBuffers(triangles);
