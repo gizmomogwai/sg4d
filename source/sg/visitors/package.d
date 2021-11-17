@@ -21,7 +21,7 @@ class BehaviorVisitor : Visitor
         n.run();
         foreach (child; n.childs)
         {
-            child.accept(this);
+            child.get.accept(this);
         }
     }
 }
@@ -31,34 +31,39 @@ class PrintVisitor : Visitor
     import std.stdio;
 
     string indent = "";
-    override void visit(Node node)
+    override void visit(NodeData node)
     {
-        writeNode("Node", node);
+        writeNode("NodeData", node);
     }
 
-    override void visit(Scene n)
+    override void visit(GroupData g)
     {
-        writeNode("Scene", n);
+        writeNode("GroupData", g);
     }
 
-    override void visit(ProjectionNode n)
+    override void visit(SceneData n)
     {
-        writeNode("ProjectonNode", n);
+        writeNode("SceneData", n);
     }
 
-    override void visit(Observer n)
+    override void visit(ProjectionGroupData n)
     {
-        writeNode("Observer", n, (string indent) => writeln(indent, "position=", n.getPosition));
+        writeNode("ProjectonGroupData", n);
     }
 
-    override void visit(TransformationNode n)
+    override void visit(ObserverData n)
     {
-        writeNode("TransformationNode", n);
+        writeNode("ObserverData", n, (string indent) => writeln(indent, "position=", n.getPosition));
     }
 
-    override void visit(Shape n)
+    override void visit(TransformationGroupData n)
     {
-        writeNode("Shape", n);
+        writeNode("TransformationGroupData", n);
+    }
+
+    override void visit(ShapeGroupData n)
+    {
+        writeNode("ShapeGroupData", n);
     }
 
     override void visit(Behavior n)
@@ -66,7 +71,7 @@ class PrintVisitor : Visitor
         writeNode("Behavior", n);
     }
 
-    private void writeNode(string type, Node node, void delegate(string) more = null)
+    private void writeNode(string type, NodeData node, void delegate(string) more = null)
     {
         writeln(indent, type);
         const oldIndent = indent;
@@ -77,10 +82,13 @@ class PrintVisitor : Visitor
         {
             more(indent);
         }
-        writeln(indent, "#childs=", node.childs.length);
-        foreach (child; node.childs)
+        if (auto group = cast(GroupData) node)
         {
-            child.accept(this);
+            writeln(indent, "#childs=", group.childs.length);
+            foreach (child; group.childs)
+            {
+                child.get.accept(this);
+            }
         }
         indent = oldIndent;
     }

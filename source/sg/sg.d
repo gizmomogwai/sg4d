@@ -7,6 +7,8 @@
 module sg.sg;
 
 import automem;
+import autoptr.common;
+import autoptr.intrusive_ptr;
 import optional;
 import std.concurrency;
 import std.exception;
@@ -19,7 +21,7 @@ import sg.window;
 public import gl3n.linalg;
 public import imagefmt;
 
-void checkOglError()
+void checkOglErrors()
 {
     string[] errors;
     GLenum error = glGetError();
@@ -28,15 +30,15 @@ void checkOglError()
         errors ~= "OGL error %s (%s)".format(error, glGetErrorString(error));
         error = glGetError();
     }
-    if (errors.length > 0) {
+    if (errors.length > 0)
+    {
         throw new Exception(errors.join("\n"));
     }
 }
 
-
 private string glGetErrorString(GLenum error)
 {
-    switch(error)
+    switch (error)
     {
     case GL_INVALID_ENUM:
         return "GL_INVALID_ENUM";
@@ -57,26 +59,29 @@ int glGetInt(GLenum what)
 {
     int result;
     glGetIntegerv(what, &result);
-    checkOglError();
+    checkOglErrors();
     return result;
 }
 
-class Node
+class CustomData
 {
-    protected Optional!Scene scene;
-    Node[] childs;
+}
+
+class NodeData
+{
+    SharedControlType referenceCounter;
+
+    Tid renderThread; // TODO rename
+    bool live; // TODO implement
+
     private string name;
     CustomData customData;
+
     this(string _name)
     {
         name = _name;
     }
-
-    auto getChild(size_t idx)
-    {
-        ensureRenderThread;
-        return childs[idx];
-    }
+    ~this() {}
 
     auto getName()
     {
@@ -85,7 +90,10 @@ class Node
 
     void ensureRenderThread()
     {
-        oc(scene).ensureRenderThread;
+        if (live)
+        {
+            enforce(thisTid == renderThread, "methods on live object called from wrong thread");
+        }
     }
 
     void accept(Visitor v)
@@ -93,13 +101,48 @@ class Node
         v.visit(this);
     }
 
-    void addChild(Node n)
+    void setRenderThread(Tid tid)
+    {
+        if (live)
+        {
+            throw new Exception("Node '%s' already attached to a tid".format(name));
+        }
+        this.renderThread = tid;
+        this.live = true;
+    }
+}
+
+alias Node = IntrusivePtr!NodeData;
+
+class GroupData : NodeData
+{
+    Node[] childs;
+
+    this(string name)
+    {
+        super(name);
+    }
+
+    ~this() {
+        foreach (ref child; childs) {
+            child.exchange(null);
+        }
+    }
+
+    auto getChild(size_t idx)
     {
         ensureRenderThread;
+        return childs[idx];
+    }
+
+    void addChild(T)(T child)
+    {
+        Node n = child;
+        ensureRenderThread;
         childs ~= n;
-        if (!scene.empty)
+        if (live)
         {
-            n.setScene(scene.front);
+            n.get.setRenderThread(renderThread);
         }
     }
 
@@ -116,61 +159,27 @@ class Node
         {
             throw new Exception("index out of bounds");
         }
+        childs[idx].exchange(null);
         childs[idx] = n;
-        if (!scene.empty)
-        {
-            n.setScene(scene.front);
-        }
-    }
-
-    void setScene(Scene scene)
-    {
         if (live)
         {
-            throw new Exception("Node '%s' already attached to a scene".format(name));
-        }
-        this.scene = scene;
-        foreach (child; childs)
-        {
-            child.setScene(scene);
+            n.get.setRenderThread(renderThread);
         }
     }
 
-    Node findByName(string name)
+    override void setRenderThread(Tid tid)
     {
-        if (name == this.name)
-        {
-            return this;
-        }
-        foreach (child; childs)
-        {
-            auto h = child.findByName(name);
-            if (h !is null)
-            {
-                return h;
-            }
-        }
-        return null;
-    }
-
-    bool live()
-    {
-        return !scene.empty;
-    }
-    /// Can be called if one wants to cleanup manually (and earlier
-    /// than the gc)
-    void free()
-    {
-        foreach (child; childs)
-        {
-            child.free;
+        super.setRenderThread(tid);
+        foreach (child; childs) {
+            child.get.setRenderThread(tid);
         }
     }
 }
 
-class Scene : Node
+alias Group = IntrusivePtr!GroupData;
+
+class SceneData : GroupData
 {
-    private Optional!Tid renderThread;
     this(string _name)
     {
         super(_name);
@@ -180,24 +189,11 @@ class Scene : Node
     {
         v.visit(this);
     }
-
-    auto bind(Tid tid)
-    {
-        renderThread = tid;
-        setScene(this);
-        return this;
-    }
-
-    override void ensureRenderThread()
-    {
-        if (!renderThread.empty)
-        {
-            enforce(thisTid == renderThread, "methods on live object called from wrong thread");
-        }
-    }
 }
 
-class ProjectionNode : Node
+alias Scene = IntrusivePtr!SceneData;
+
+class ProjectionGroupData : GroupData
 {
     private Projection projection;
     this(string _name, Projection projection)
@@ -205,7 +201,6 @@ class ProjectionNode : Node
         super(_name);
         this.projection = projection;
     }
-
     override void accept(Visitor v)
     {
         v.visit(this);
@@ -224,6 +219,8 @@ class ProjectionNode : Node
         return this;
     }
 }
+
+alias ProjectionGroup = IntrusivePtr!ProjectionGroupData;
 
 abstract class Projection
 {
@@ -258,10 +255,11 @@ class ParallelProjection : Projection
     }
 }
 
-class IdentityProjection : Projection {
+class IdentityProjection : Projection
+{
     this()
     {
-        super(1,2);
+        super(1, 2);
     }
 
     override mat4 getProjectionMatrix(int width, int height)
@@ -283,9 +281,10 @@ class CameraProjection : Projection
     }
 }
 
-class Observer : ProjectionNode
+class ObserverData : ProjectionGroupData
 {
     private vec3 position = vec3(0, 0, 0);
+
     this(string name, Projection projection)
     {
         super(name, projection);
@@ -330,15 +329,17 @@ class Observer : ProjectionNode
     }
 }
 
-class TransformationNode : Node
+alias Observer = IntrusivePtr!ObserverData;
+
+class TransformationGroupData : GroupData
 {
     private mat4 transformation;
+
     this(string _name, mat4 transformation)
     {
         super(_name);
         this.transformation = transformation;
     }
-
     override void accept(Visitor v)
     {
         v.visit(this);
@@ -358,7 +359,9 @@ class TransformationNode : Node
     }
 }
 
-class Geometry : Node
+alias TransformationGroup = IntrusivePtr!TransformationGroupData;
+
+class Geometry : NodeData
 {
     enum Type
     {
@@ -391,7 +394,7 @@ class TriangleArray : Geometry
     }
 }
 
-class VertexData : Node
+class VertexData : NodeData
 {
     enum Component
     {
@@ -505,10 +508,10 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
         // dfmt off
         super(name, Type.ARRAY,
               new VertexData(name,
-                  VertexData.Components(
-                      VertexData.Component.VERTICES,
-                      VertexData.Component.TEXTURE_COORDINATES
-                  ), 8),
+                             VertexData.Components(
+                                 VertexData.Component.VERTICES,
+                                 VertexData.Component.TEXTURE_COORDINATES
+                             ), 8),
               [
                   // back
                   0, 2, 1, 0, 3, 2,
@@ -557,25 +560,16 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
     }
 }
 
-class Triangle : TriangleArray {
-    this(string name) {
-        super(name, Type.ARRAY,
-              [
-                  vec3(-0.5,-0.5,0.0),
-                  vec3(0.5,-0.5,0.0),
-                  vec3(0.0,0.5,0.0),
-              ],
-              [
-                  vec4(1.0, 0.0, 0.0, 1.0),
-                  vec4(0.0, 1.0, 0.0, 1.0),
+class Triangle : TriangleArray
+{
+    this(string name)
+    {
+        super(name, Type.ARRAY, [
+                  vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(0.0, 0.5, 0.0),
+              ], [
+                  vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0),
                   vec4(0.0, 0.0, 1.0, 1.0),
-              ],
-              [
-                  vec2(0.0, 0.0),
-                  vec2(1.0, 0.0),
-                  vec2(1.0, 1.0),
-              ],
-        );
+              ], [vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0),],);
     }
 }
 
@@ -753,7 +747,8 @@ class TriangleArrayCube : TriangleArray
 }
 
 alias Textures = Vector!Texture;
-class Appearance : Node
+
+class Appearance : NodeData
 {
     Textures textures;
     this(Textures textures)
@@ -767,15 +762,6 @@ class Appearance : Node
         this.textures[index] = t;
     }
 
-    override void free()
-    {
-        textures.free;
-    }
-}
-
-class CustomData
-{
-    abstract void free();
 }
 
 class _Texture
@@ -791,19 +777,11 @@ class _Texture
         this.wrapT = wrapT;
     }
 
-    ~this()
-    {
-        if (customData)
-        {
-            customData.free;
-            customData = null;
-        }
-    }
 }
 
 alias Texture = RefCounted!(_Texture);
 
-class Shape : Node
+class ShapeGroupData : GroupData
 {
     Geometry geometry;
     Appearance appearance;
@@ -837,14 +815,11 @@ class Shape : Node
         this.appearance = appearance;
     }
 
-    override void free()
-    {
-        appearance.free;
-        geometry.free;
-    }
 }
 
-class Behavior : Node
+alias ShapeGroup = IntrusivePtr!ShapeGroupData;
+
+class Behavior : GroupData
 {
     void delegate() behavior;
     this(string name, void delegate() b)
@@ -866,32 +841,36 @@ class Behavior : Node
 
 class Visitor
 {
-    void visit(Node n)
+    void visit(NodeData n)
+    {
+    }
+
+    void visit(GroupData g)
+    {
+        visitChilds(g);
+    }
+
+    void visit(SceneData n)
     {
         visitChilds(n);
     }
 
-    void visit(Scene n)
+    void visit(ProjectionGroupData n)
     {
         visitChilds(n);
     }
 
-    void visit(ProjectionNode n)
+    void visit(ObserverData n)
     {
         visitChilds(n);
     }
 
-    void visit(Observer n)
+    void visit(TransformationGroupData n)
     {
         visitChilds(n);
     }
 
-    void visit(TransformationNode n)
-    {
-        visitChilds(n);
-    }
-
-    void visit(Shape n)
+    void visit(ShapeGroupData n)
     {
         visitChilds(n);
     }
@@ -901,11 +880,11 @@ class Visitor
         visitChilds(n);
     }
 
-    protected void visitChilds(Node n)
+    protected void visitChilds(GroupData n)
     {
         foreach (child; n.childs)
         {
-            child.accept(this);
+            child.get.accept(this);
         }
     }
 }

@@ -1,6 +1,8 @@
 module sg.window;
 import std;
 import sg;
+import autoptr.common;
+import autoptr.intrusive_ptr;
 
 public import bindbc.glfw;
 import glfwloader = bindbc.loader.sharedlib;
@@ -59,7 +61,7 @@ class Window
     this(Scene scene, int width, int height, KeyCallback keyCallback)
     {
         this.scene = scene;
-        scene.bind(thisTid);
+        scene.get.setRenderThread(thisTid);
         this.keyCallback = keyCallback;
         loadBindBCGlfw();
         glfwInit();

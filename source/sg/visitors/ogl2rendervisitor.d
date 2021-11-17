@@ -3,10 +3,11 @@ module sg.visitors.ogl2rendervisitor;
 version (Default)
 {
 
-    import sg;
     import sg.visitors;
     import sg.window;
-    import std;
+    import sg;
+    import std.concurrency;
+    import std.stdio;
 
     // opengl version till 2.1
     /++
@@ -24,15 +25,19 @@ version (Default)
             this.window = window;
         }
 
-        override void visit(Node n)
+        override void visit(NodeData)
         {
-            foreach (child; n.childs)
+        }
+
+        override void visit(GroupData g)
+        {
+            foreach (ref child; g.childs)
             {
-                child.accept(this);
+                child.get.accept(this);
             }
         }
 
-        override void visit(Scene n)
+        override void visit(SceneData n)
         {
             n.ensureRenderThread;
 
@@ -51,41 +56,43 @@ version (Default)
             glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
             glViewport(0, 0, window.getWidth(), window.getHeight());
 
-            visit(cast(Node)(n));
+            visit(cast(GroupData) n);
         }
 
-        void debugMatrix(string msg, int which) {
+        void debugMatrix(string msg, int which)
+        {
             mat4 m;
             glGetFloatv(which, m.matrix[0].ptr);
-            checkOglError;
+            checkOglErrors;
             writeln(msg, m.transposed.toPrettyString);
         }
-        override void visit(ProjectionNode n)
+
+        override void visit(ProjectionGroupData n)
         {
             glMatrixMode(GL_PROJECTION);
             glLoadIdentity();
             glMultMatrixf(n.getProjection.getProjectionMatrix(window.getWidth,
                     window.getHeight).transposed.value_ptr);
             glMatrixMode(GL_MODELVIEW);
-            visit(cast(Node) n);
+            visit(cast(GroupData) n);
         }
 
-        override void visit(Observer n)
+        override void visit(ObserverData n)
         {
             glMatrixMode(GL_MODELVIEW);
             glLoadIdentity();
             glMultMatrixf(n.getCameraTransformation.transposed.value_ptr);
 
-            visit(cast(ProjectionNode) n);
+            visit(cast(ProjectionGroupData) n);
         }
 
-        override void visit(TransformationNode n)
+        override void visit(TransformationGroupData n)
         {
             glPushMatrix();
             glMultMatrixf(n.getTransformation.transposed.value_ptr);
-            foreach (child; n.childs)
+            foreach (ref child; n.childs)
             {
-                child.accept(this);
+                child.get.accept(this);
             }
             glPopMatrix();
         }
@@ -100,15 +107,6 @@ version (Default)
                 this.textureName = textureName;
             }
 
-            override void free()
-            {
-                renderThread.send(cast(shared)() {
-                    import std.stdio;
-
-                    writeln("freeing texture ", textureName);
-                    glDeleteTextures(1, &textureName);
-                });
-            }
         }
 
         private TextureName createAndLoadTexture(Texture texture)
@@ -116,11 +114,11 @@ version (Default)
             auto image = texture.image;
             GLuint textureName;
             glGenTextures(1, &textureName);
-            checkOglError();
+            checkOglErrors;
             glBindTexture(GL_TEXTURE_2D, textureName);
-            checkOglError();
+            checkOglErrors;
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            checkOglError();
+            checkOglErrors;
             glTexImage2D(GL_TEXTURE_2D, // target
                     0, // level
                     GL_RGB, // internalFormat
@@ -131,11 +129,11 @@ version (Default)
                     GL_UNSIGNED_BYTE, // type
                     image.buf8.ptr // pixels
                     );
-            checkOglError();
+            checkOglErrors;
             glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-            checkOglError();
+            checkOglErrors;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            checkOglError();
+            checkOglErrors;
             auto result = new TextureName(thisTid, textureName);
             texture.customData = result;
             return result;
@@ -144,26 +142,26 @@ version (Default)
         private void activate(Texture texture)
         {
             glEnable(GL_TEXTURE_2D);
-            checkOglError();
+            checkOglErrors;
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.wrapS ? GL_REPEAT : GL_CLAMP);
-            checkOglError();
+            checkOglErrors;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
-            checkOglError();
+            checkOglErrors;
             // dfmt off
             auto textureName = cast(TextureName) texture.customData is null ?
                 createAndLoadTexture(texture)
                 : cast(TextureName) texture.customData;
             // dfmt on
             glBindTexture(GL_TEXTURE_2D, textureName.textureName);
-            checkOglError();
+            checkOglErrors;
         }
 
-        override void visit(Shape n)
+        override void visit(ShapeGroupData n)
         {
             if (auto appearance = n.appearance)
             {
-//                activate(appearance.textures[0]);
+                activate(appearance.textures[0]);
             }
             /+ immediate mode
         if (auto triangleArray = cast(TriangleArray) n.geometry)
@@ -192,8 +190,8 @@ version (Default)
                     glEnableClientState(GL_VERTEX_ARRAY);
                     glVertexPointer(3, GL_FLOAT, 0, g.coordinates.ptr);
 
-  //                  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-//                    glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
+                    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+                    glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
 
                     glEnableClientState(GL_COLOR_ARRAY);
                     glColorPointer(4, GL_FLOAT, 0, g.colors.ptr);

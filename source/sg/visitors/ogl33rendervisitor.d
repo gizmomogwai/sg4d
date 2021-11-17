@@ -8,8 +8,11 @@ version (GL_33)
     import sg;
     import sg.visitors;
     import sg.window;
-    import std;
-
+    import std.concurrency;
+    import std.conv;
+    import std.exception;
+    import std.string;
+    
     // adapted from https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
 
     ///
@@ -29,43 +32,46 @@ version (GL_33)
             this.type = type;
 
             shader = (type == Type.vertex ? GL_VERTEX_SHADER : GL_FRAGMENT_SHADER).glCreateShader;
-            checkOglError;
+            checkOglErrors;
 
             auto stringLength = cast(int) source.length;
             const(char)* stringPointer = source.ptr;
             shader.glShaderSource(1, &stringPointer, &stringLength);
-            checkOglError;
+            checkOglErrors;
 
             shader.glCompileShader();
-            checkOglError;
+            checkOglErrors;
 
             GLint success;
             shader.glGetShaderiv(GL_COMPILE_STATUS, &success);
-            checkOglError;
+            checkOglErrors;
             if (!success)
             {
                 GLchar[1024] infoLog;
                 GLsizei logLen;
                 shader.glGetShaderInfoLog(1024, &logLen, infoLog.ptr);
-                checkOglError;
+                checkOglErrors;
 
                 auto errors = (infoLog[0 .. logLen - 1]).to!string;
-                success.enforce("Error compiling shader\n  type='%s'\n  source='%s'\n  errors: '%s'".format(type, source, errors));
+                success.enforce("Error compiling shader\n  type='%s'\n  source='%s'\n  errors: '%s'".format(type,
+                        source, errors));
             }
         }
 
         ~this()
         {
             shader.glDeleteShader();
-            checkOglError;
+            checkOglErrors;
         }
     }
 
-    class Program {
+    class Program
+    {
         GLuint program;
         GLuint[string] attributesCache;
         GLuint[string] uniformsCache;
-        this(Shader vertexShader, Shader fragmentShader) {
+        this(Shader vertexShader, Shader fragmentShader)
+        {
             program = glCreateProgram();
             (program != 0).enforce("Cannot create program");
             program.glAttachShader(vertexShader.shader);
@@ -73,34 +79,48 @@ version (GL_33)
             program.glLinkProgram();
             GLint success;
             program.glGetProgramiv(GL_LINK_STATUS, &success);
-            if (success == 0) {
+            if (success == 0)
+            {
                 static GLchar[1024] logBuff;
                 static GLsizei logLen;
                 program.glGetProgramInfoLog(logBuff.sizeof, &logLen, logBuff.ptr);
-                throw new Exception("Error: linking program: %s".format(logBuff[0..logLen-1].to!string));
+                throw new Exception("Error: linking program: %s".format(
+                        logBuff[0 .. logLen - 1].to!string));
             }
         }
-        auto setUniform(string name, mat4 matrix) {
-            auto location = name in uniformsCache ? uniformsCache[name] : addUniformLocationToCache(name);
+
+        auto setUniform(string name, mat4 matrix)
+        {
+            auto location = name in uniformsCache ? uniformsCache[name] : addUniformLocationToCache(
+                    name);
             location.glUniformMatrix4fv(1, GL_TRUE, matrix.value_ptr);
-            checkOglError;
+            checkOglErrors;
         }
-        private GLuint addUniformLocationToCache(string name) {
+
+        private GLuint addUniformLocationToCache(string name)
+        {
             auto location = program.glGetUniformLocation(name.ptr);
             (location != -1).enforce("Cannot find uniform location for '%s'".format(name));
             uniformsCache[name] = location;
             return location;
         }
-        private GLuint addAttributeLocationToCache(string name) {
+
+        private GLuint addAttributeLocationToCache(string name)
+        {
             auto location = program.glGetAttribLocation(name.ptr);
             (location != -1).enforce("Cannot find attribute location for '%s'".format(name));
             attributesCache[name] = location;
             return location;
         }
-        auto getAttribute(string name) {
-            return name in attributesCache ? attributesCache[name] : addAttributeLocationToCache(name);
+
+        auto getAttribute(string name)
+        {
+            return name in attributesCache ? attributesCache[name] : addAttributeLocationToCache(
+                    name);
         }
-        void use() {
+
+        void use()
+        {
             program.glUseProgram();
         }
     }
@@ -154,161 +174,172 @@ version (GL_33)
             program.use();
         }
 
-        override void visit(Node n)
+        override void visit(NodeData n)
+        {
+        }
+
+        override void visit(GroupData n)
         {
             foreach (child; n.childs)
             {
-                child.accept(this);
+                child.get.accept(this);
             }
         }
 
-        override void visit(Scene n)
+        override void visit(SceneData n)
         {
             n.ensureRenderThread;
 
             glClearColor(1, 0, 0, 1);
-            checkOglError();
+            checkOglErrors;
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            checkOglError();
+            checkOglErrors;
             glFrontFace(GL_CCW);
-            checkOglError();
+            checkOglErrors;
             glCullFace(GL_BACK);
-            checkOglError();
+            checkOglErrors;
             glEnable(GL_CULL_FACE);
-            checkOglError();
+            checkOglErrors;
             // glDisable(GL_CULL_FACE);
             glDisable(GL_DITHER);
-            checkOglError();
+            checkOglErrors;
             glDisable(GL_DEPTH_TEST);
-            checkOglError();
+            checkOglErrors;
             //  glDepthFunc(GL_LESS);
-            checkOglError();
+            checkOglErrors;
             // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-            checkOglError();
-            glViewport(0, 0, window.getWidth, window.getHeight);
-            checkOglError();
+            checkOglErrors;
+            glViewport(0, 0, window.get.getWidth, window.get.getHeight);
+            checkOglErrors;
 
-            visit(cast(Node)(n));
+            visit(cast(GroupData) n);
         }
 
-        override void visit(ProjectionNode n)
+        override void visit(ProjectionGroupData n)
         {
-            program.setUniform("projection", n.getProjection.getProjectionMatrix(window.getWidth, window.getHeight));
-            visit(cast(Node) n);
+            program.setUniform("projection",
+                    n.getProjection.getProjectionMatrix(window.get.getWidth, window.get.getHeight));
+            visit(cast(GroupData) n);
         }
 
-        override void visit(Observer n)
+        override void visit(ObserverData n)
         {
             modelViewStack = [mat4.identity * n.getCameraTransformation];
-            visit(cast(ProjectionNode) n);
+            visit(cast(ProjectionGroupData) n);
         }
 
-        override void visit(TransformationNode n)
+        override void visit(TransformationGroupData n)
         {
             auto old = modelViewStack;
-            modelViewStack ~= modelViewStack[$-1]*n.getTransformation;
+            modelViewStack ~= modelViewStack[$ - 1] * n.getTransformation;
             foreach (child; n.childs)
             {
-                child.accept(this);
+                child.get.accept(this);
             }
             modelViewStack = old;
         }
 
-        class Buffers : CustomData {
+        class Buffers : CustomData
+        {
             VAO vao;
             VBO positions;
             VBO colors;
             VBO textureCoordinates;
-            this() {
+            this()
+            {
                 vao = new VAO();
                 positions = new VBO();
                 colors = new VBO();
                 textureCoordinates = new VBO();
             }
-            auto bind() {
+
+            auto bind()
+            {
                 vao.bind();
                 return this;
             }
-            override void free() {
-                // TODO
-            }
         }
-        class VAO {
+
+        class VAO
+        {
             GLuint vertexArray;
-            this() {
+            this()
+            {
                 1.glGenVertexArrays(&vertexArray);
-                checkOglError;
+                checkOglErrors;
             }
-            void free() {
-                // TODO
-            }
-            auto bind() {
+
+            auto bind()
+            {
                 vertexArray.glBindVertexArray();
-                checkOglError;
+                checkOglErrors;
                 return this;
             }
         }
-        class VBO {
+
+        class VBO
+        {
             GLuint buffer;
-            this() {
+            this()
+            {
                 1.glGenBuffers(&buffer);
-                checkOglError;
+                checkOglErrors;
             }
-            void free() {
-                // TODO
-            }
-            auto bind() {
+
+            auto bind()
+            {
                 GL_ARRAY_BUFFER.glBindBuffer(buffer);
-                checkOglError;
+                checkOglErrors;
                 return this;
             }
-            auto data(T)(T data) {
-                GL_ARRAY_BUFFER.glBufferData(data.length*T.sizeof, cast(void*)data.ptr, GL_STATIC_DRAW);
-                checkOglError;
+
+            auto data(T)(T data)
+            {
+                GL_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
+                        cast(void*) data.ptr, GL_STATIC_DRAW);
+                checkOglErrors;
                 return this;
             }
         }
-        void prepareBuffers(TriangleArray triangles) {
-            if (auto buffers = cast(Buffers)triangles.customData) {
+
+        void prepareBuffers(TriangleArray triangles)
+        {
+            if (auto buffers = cast(Buffers) triangles.customData)
+            {
                 buffers.bind();
-            } else {
+            }
+            else
+            {
                 auto buffers = new Buffers().bind();
+
                 buffers.positions.bind.data(triangles.coordinates);
                 auto position = program.getAttribute("position");
-                position.glVertexAttribPointer(3,
-                                               GL_FLOAT,
-                                               GL_FALSE, // normalized
-                                               vec3.sizeof, // stride
-                                               cast(void*)0); // offset of the first
-                checkOglError;
+                position.glVertexAttribPointer(3, GL_FLOAT, GL_FALSE, // normalized
+                        vec3.sizeof, // stride
+                        cast(void*) 0); // offset of the first
+                checkOglErrors;
                 position.glEnableVertexAttribArray();
-                checkOglError;
+                checkOglErrors;
 
                 buffers.colors.bind.data(triangles.colors);
                 auto color = program.getAttribute("color");
-                color.glVertexAttribPointer(4,
-                                            GL_FLOAT,
-                                            GL_FALSE,
-                                            vec4.sizeof,
-                                            cast(void*)0);
-                checkOglError;
+                color.glVertexAttribPointer(4, GL_FLOAT, GL_FALSE, vec4.sizeof, cast(void*) 0);
+                checkOglErrors;
                 color.glEnableVertexAttribArray();
-                checkOglError;
+                checkOglErrors;
 
                 buffers.textureCoordinates.bind.data(triangles.textureCoordinates);
                 auto textureCoordinate = program.getAttribute("textureCoordinate");
-                textureCoordinate.glVertexAttribPointer(2,
-                                                        GL_FLOAT,
-                                                        GL_FALSE,
-                                                        vec2.sizeof,
-                                                        cast(void*)0);
-                checkOglError;
+                textureCoordinate.glVertexAttribPointer(2, GL_FLOAT, GL_FALSE,
+                        vec2.sizeof, cast(void*) 0);
+                checkOglErrors;
                 textureCoordinate.glEnableVertexAttribArray();
-                checkOglError;
+                checkOglErrors;
 
                 triangles.customData = buffers;
             }
         }
+
         class TextureName : CustomData
         {
             GLuint textureName;
@@ -317,22 +348,19 @@ version (GL_33)
                 this.textureName = textureName;
             }
 
-            override void free()
-            {
-            }
         }
 
         private TextureName createAndLoadTexture(Texture texture)
         {
             auto image = texture.image;
             GLuint textureName;
-            glGenTextures(1, &textureName);
-            checkOglError();
-            glBindTexture(GL_TEXTURE_2D, textureName);
-            checkOglError();
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            checkOglError();
-            glTexImage2D(GL_TEXTURE_2D, // target
+            1.glGenTextures(&textureName);
+            checkOglErrors;
+            GL_TEXTURE_2D.glBindTexture(textureName);
+            checkOglErrors;
+            GL_UNPACK_ALIGNMENT.glPixelStorei(1);
+            checkOglErrors;
+            GL_TEXTURE_2D.glTexImage2D( // target
                     0, // level
                     GL_RGB, // internalFormat
                     image.w, // width
@@ -342,10 +370,10 @@ version (GL_33)
                     GL_UNSIGNED_BYTE, // type
                     image.buf8.ptr // pixels
                     );
-            checkOglError();
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            checkOglError();
+            checkOglErrors;
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            checkOglErrors;
             auto result = new TextureName(textureName);
             texture.customData = result;
             return result;
@@ -353,23 +381,25 @@ version (GL_33)
 
         private void activate(Texture texture)
         {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.wrapS ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-            checkOglError();
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP_TO_EDGE);
-            checkOglError();
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_WRAP_S, texture.wrapS
+                    ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+            checkOglErrors;
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_WRAP_T, texture.wrapT
+                    ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+            checkOglErrors;
             // dfmt off
             auto textureName = cast(TextureName) texture.customData is null ?
                 createAndLoadTexture(texture)
                 : cast(TextureName) texture.customData;
             // dfmt on
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, textureName.textureName);
-            checkOglError();
+            GL_TEXTURE0.glActiveTexture();
+            GL_TEXTURE_2D.glBindTexture(textureName.textureName);
+            checkOglErrors;
         }
 
-        override void visit(Shape n)
+        override void visit(ShapeGroupData n)
         {
-            program.setUniform("modelView", modelViewStack[$-1]);
+            program.setUniform("modelView", modelViewStack[$ - 1]);
 
             if (auto appearance = n.appearance)
             {
@@ -379,11 +409,13 @@ version (GL_33)
             if (auto triangles = cast(TriangleArray) n.geometry)
             {
                 prepareBuffers(triangles);
-                GL_TRIANGLES.glDrawArrays(0, cast(int)triangles.coordinates.length);
-                checkOglError;
+                GL_TRIANGLES.glDrawArrays(0, cast(int) triangles.coordinates.length);
+                checkOglErrors;
             }
         }
 
-        alias visit = Visitor.visit;
+        override void visit(Behavior b)
+        {
+        }
     }
 }

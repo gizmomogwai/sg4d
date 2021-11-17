@@ -3,17 +3,12 @@ description "Scenegraph api for dlang."
 authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
-
-targetType "library"
-targetPath "out"
-
+dependency "gl3n" version=">=0.0.0"
+dependency "bindbc-opengl" version="~>1.0.0"
+dependency "automem" version="~>0.6.7"
+dependency "autoptr" version=">=0.6.0-rc1 <0.7.0-0"
 dependency "imagefmt" version="~>2.1.2"
 dependency "bindbc-glfw" version="~>1.0.0"
-versions "GLFW_33" // newest GLFW
-// versions "Default" "GL_ARB" "GL_AllowDeprecated" // Opengl2.1
-// versions "GL_33"
-dependency "bindbc-opengl" version="~>1.0.0"
-dependency "gl3n" version=">=0.0.0"
 dependency "optional" version="~>1.3.0"
-dependency "automem" version="~>0.6.7"
-
+targetType "library"
+targetPath "out"
