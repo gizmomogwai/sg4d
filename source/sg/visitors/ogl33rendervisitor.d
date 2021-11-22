@@ -12,7 +12,7 @@ version (GL_33)
     import std.conv;
     import std.exception;
     import std.string;
-    
+
     // adapted from https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
 
     ///
@@ -180,7 +180,7 @@ version (GL_33)
 
         override void visit(GroupData n)
         {
-            foreach (child; n.childs)
+            foreach (ref child; n.childs)
             {
                 child.get.accept(this);
             }
@@ -201,6 +201,7 @@ version (GL_33)
             glEnable(GL_CULL_FACE);
             checkOglErrors;
             // glDisable(GL_CULL_FACE);
+            // checkOglErrors;
             glDisable(GL_DITHER);
             checkOglErrors;
             glDisable(GL_DEPTH_TEST);
@@ -209,7 +210,7 @@ version (GL_33)
             checkOglErrors;
             // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             checkOglErrors;
-            glViewport(0, 0, window.get.getWidth, window.get.getHeight);
+            glViewport(0, 0, window.getWidth, window.getHeight);
             checkOglErrors;
 
             visit(cast(GroupData) n);
@@ -218,7 +219,7 @@ version (GL_33)
         override void visit(ProjectionGroupData n)
         {
             program.setUniform("projection",
-                    n.getProjection.getProjectionMatrix(window.get.getWidth, window.get.getHeight));
+                    n.getProjection.getProjectionMatrix(window.getWidth, window.getHeight));
             visit(cast(GroupData) n);
         }
 
@@ -232,14 +233,11 @@ version (GL_33)
         {
             auto old = modelViewStack;
             modelViewStack ~= modelViewStack[$ - 1] * n.getTransformation;
-            foreach (child; n.childs)
-            {
-                child.get.accept(this);
-            }
+            visit(cast(GroupData)n);
             modelViewStack = old;
         }
 
-        class Buffers : CustomData
+        class TriangleArrayBuffers : CustomData
         {
             VAO vao;
             VBO positions;
@@ -259,7 +257,39 @@ version (GL_33)
                 return this;
             }
         }
-
+        class IndexedInterleavedTriangleArrayBuffers : CustomData {
+            VAO vao;
+            VBO vertexData;
+            EBO indexData;
+            this() {
+                vao = new VAO();
+                vertexData = new VBO();
+                indexData = new EBO();
+            }
+            auto bind() {
+                vao.bind();
+                return this;
+            }
+        }
+        class EBO {
+            GLuint indexArray;
+            this() {
+                1.glGenBuffers(&indexArray);
+                checkOglErrors;
+            }
+            auto bind() {
+                GL_ELEMENT_ARRAY_BUFFER.glBindBuffer(indexArray);
+                return this;
+            }
+            auto data(T)(T[] data) {
+                import std.stdio; writeln("ebo data: ", data.length);
+                writeln(T.sizeof);
+                GL_ELEMENT_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
+                        cast(void*) data.ptr, GL_STATIC_DRAW);
+                checkOglErrors;
+                return this;
+            }
+        }
         class VAO
         {
             GLuint vertexArray;
@@ -293,7 +323,7 @@ version (GL_33)
                 return this;
             }
 
-            auto data(T)(T data)
+            auto data(T)(T[] data)
             {
                 GL_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
                         cast(void*) data.ptr, GL_STATIC_DRAW);
@@ -301,16 +331,59 @@ version (GL_33)
                 return this;
             }
         }
+        void prepareBuffers(IndexedInterleavedTriangleArray triangles)
+        {
+            if (auto buffers = cast(IndexedInterleavedTriangleArrayBuffers) triangles.customData) {
+                buffers.bind();
+            } else {
+                auto buffers = new IndexedInterleavedTriangleArrayBuffers().bind();
 
+                buffers.indexData.bind.data(triangles.indices);
+
+                buffers.vertexData.bind.data(triangles.data.data);
+
+                auto position = program.getAttribute("position");
+                position.glVertexAttribPointer(3, GL_FLOAT, GL_FALSE,
+                                               cast(int)(triangles.data.tupleSize * float.sizeof),
+                                               cast(void*)0);
+                checkOglErrors();
+                position.glEnableVertexAttribArray();
+                checkOglErrors();
+
+                if (triangles.data.components.COLORS) {
+                    auto color = program.getAttribute("color");
+                    color.glVertexAttribPointer(4, GL_FLOAT, GL_FALSE,
+                                                cast(int)(triangles.data.tupleSize * float.sizeof),
+                                                cast(void*)(triangles.data.colorsOffset*float.sizeof));
+                    checkOglErrors();
+                    color.glEnableVertexAttribArray();
+                    checkOglErrors();
+                }
+
+                if (triangles.data.components.TEXTURE_COORDINATES) {
+                    auto textureCoordinate = program.getAttribute("textureCoordinate");
+                    textureCoordinate.glVertexAttribPointer(2, GL_FLOAT, GL_FALSE,
+                                                            cast(int)(triangles.data.tupleSize * float.sizeof),
+                                                            cast(void*)(triangles.data.textureCoordinatesOffset*float.sizeof));
+                    checkOglErrors();
+                    textureCoordinate.glEnableVertexAttribArray();
+                    checkOglErrors();
+                }
+
+                // TODO normals
+
+                triangles.customData = buffers;
+            }
+        }
         void prepareBuffers(TriangleArray triangles)
         {
-            if (auto buffers = cast(Buffers) triangles.customData)
+            if (auto buffers = cast(TriangleArrayBuffers) triangles.customData)
             {
                 buffers.bind();
             }
             else
             {
-                auto buffers = new Buffers().bind();
+                auto buffers = new TriangleArrayBuffers().bind();
 
                 buffers.positions.bind.data(triangles.coordinates);
                 auto position = program.getAttribute("position");
@@ -399,8 +472,9 @@ version (GL_33)
 
         override void visit(ShapeGroupData n)
         {
-            program.setUniform("modelView", modelViewStack[$ - 1]);
-
+            auto mv = modelViewStack[$ - 1];
+            program.setUniform("modelView", mv);
+            checkOglErrors;
             if (auto appearance = n.appearance)
             {
                 activate(appearance.textures[0]);
@@ -410,6 +484,13 @@ version (GL_33)
             {
                 prepareBuffers(triangles);
                 GL_TRIANGLES.glDrawArrays(0, cast(int) triangles.coordinates.length);
+                checkOglErrors;
+            }
+
+            if (auto g = cast(IndexedInterleavedTriangleArray) n.geometry)
+            {
+                prepareBuffers(g);
+                GL_TRIANGLES.glDrawElements(cast(int)g.indices.length, GL_UNSIGNED_INT, cast(void*)0);
                 checkOglErrors;
             }
         }

@@ -510,7 +510,8 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
               new VertexData(name,
                              VertexData.Components(
                                  VertexData.Component.VERTICES,
-                                 VertexData.Component.TEXTURE_COORDINATES
+                                 VertexData.Component.COLORS,
+                                 VertexData.Component.TEXTURE_COORDINATES,
                              ), 8),
               [
                   // back
@@ -538,14 +539,15 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
         data.setVertex(6,  s,  s,  s);
         data.setVertex(7, -s,  s,  s);
 
-        // data.setColor(0, 0, 0, 0);
-        // data.setColor(1, 1, 0, 0);
-        // data.setColor(2, 1, 1, 0);
-        // data.setColor(3, 0, 1, 0);
-        // data.setColor(4, 0, 1, 1);
-        // data.setColor(5, 0, 0, 1);
-        // data.setColor(6, 1, 0, 1);
-        // data.setColor(7, 1, 1, 1);
+        data.setColor(0, 0, 0, 0);
+        data.setColor(1, 1, 0, 0);
+        data.setColor(2, 1, 1, 0);
+        data.setColor(3, 0, 1, 0);
+
+        data.setColor(4, 0, 1, 1);
+        data.setColor(5, 0, 0, 1);
+        data.setColor(6, 1, 0, 1);
+        data.setColor(7, 1, 1, 1);
 
         data.setTextureCoordinate(0, 0, 0);
         data.setTextureCoordinate(1, 1, 0);
@@ -556,6 +558,7 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
         data.setTextureCoordinate(5, 1, 0);
         data.setTextureCoordinate(6, 1, 1);
         data.setTextureCoordinate(7, 0, 1);
+
         // dfmt on
     }
 }

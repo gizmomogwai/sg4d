@@ -97,26 +97,25 @@ void main(string[] args)
         {
             o.setPosition(vec3(oldPosition.x + 1, oldPosition.yz));
         }
-        writeln(o.getPosition);
     });
 
     if (cast(ParallelProjection) projection)
     {
         observer.get.setPosition(vec3(-window.getWidth() / 2, -window.getHeight() / 2, 300));
         auto image1 = read_image("image1.jpg");
-        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, false));
+        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, true));
         observer.get.addChild(cube("cube", Texture(image1), -200, 0, 0, 0.0005, false));
     }
     else if (cast(CameraProjection) projection)
     {
         observer.get.setPosition(vec3(0, 0, 300));
         auto image1 = read_image("image1.jpg");
-        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, false));
+        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, true));
         observer.get.addChild(cube("cube", Texture(image1), -200, 0, 0, 0.0005, false));
     }
     else if (cast(IdentityProjection) projection)
     {
-        // observer.get.addChild(triangle(0.001));
+        observer.get.addChild(triangle(0.001));
     }
 
     scene.get.accept(new PrintVisitor);

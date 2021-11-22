@@ -90,10 +90,7 @@ version (Default)
         {
             glPushMatrix();
             glMultMatrixf(n.getTransformation.transposed.value_ptr);
-            foreach (ref child; n.childs)
-            {
-                child.get.accept(this);
-            }
+            visit(cast(GroupData)n);
             glPopMatrix();
         }
 
@@ -163,26 +160,7 @@ version (Default)
             {
                 activate(appearance.textures[0]);
             }
-            /+ immediate mode
-        if (auto triangleArray = cast(TriangleArray) n.geometry)
-        {
-            glBegin(GL_TRIANGLES);
-            for (int i = 0; i < triangleArray.coordinates.length; ++i)
-            {
-                auto color = triangleArray.colors[i];
-                auto coordinates = triangleArray.coordinates[i];
 
-                if (triangleArray.textureCoordinates.length > i)
-                {
-                    auto textureCoordinates = triangleArray.textureCoordinates[i];
-                    glTexCoord2f(textureCoordinates.x, textureCoordinates.y);
-                }
-                glColor3f(color.x, color.y, color.z);
-                glVertex3f(coordinates.x, coordinates.y, coordinates.z);
-            }
-            glEnd();
-        }
-        +/
             if (auto g = cast(TriangleArray) n.geometry)
             {
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
