@@ -70,12 +70,20 @@ version (GL_33)
         GLuint program;
         GLuint[string] attributesCache;
         GLuint[string] uniformsCache;
-        this(Shader vertexShader, Shader fragmentShader)
-        {
+
+        this() {
             program = glCreateProgram();
             (program != 0).enforce("Cannot create program");
-            program.glAttachShader(vertexShader.shader);
-            program.glAttachShader(fragmentShader.shader);
+        }
+        void destroy() {
+            program.glDeleteProgram;
+            checkOglErrors;
+        }
+
+        void link(Shader[] shaders...) {
+            foreach (shader; shaders) {
+                program.glAttachShader(shader.shader);
+            }
             program.glLinkProgram();
             GLint success;
             program.glGetProgramiv(GL_LINK_STATUS, &success);
@@ -124,36 +132,43 @@ version (GL_33)
             program.glUseProgram();
         }
     }
-    // https://github.com/Circular-Studios/Dash/blob/develop/source/dash/graphics/shaders/glsl/package.d
-    enum glslVersionSource = "#version 330 core\n";
-    immutable string vertexShaderSource = glslVersionSource ~ q{
-        uniform mat4 projection;
-        uniform mat4 modelView;
 
-        in vec3 position;
-        in vec4 color;
-        in vec2 textureCoordinate;
-
-        out vec4 vertexColor;
-        out vec2 vertexTextureCoordinate;
-        void main()
-        {
-            gl_Position = projection * modelView * vec4(position, 1.0);
-            vertexColor = color;
-            vertexTextureCoordinate = textureCoordinate;
+    class FileProgram : CustomData {
+        import fswatch;
+        string shaderName;
+        Program program;
+        FileWatch fileWatch;
+        this(string shaderName) {
+            this.shaderName = shaderName;
+            this.fileWatch = FileWatch("../shaders", true);
+            update();
         }
-    };
 
-    immutable string fragmentShaderSource = glslVersionSource ~ q{
-        in vec4 vertexColor;
-        in vec2 vertexTextureCoordinate;
-        uniform sampler2D texture0;
-
-        out vec4 fragmentColor;
-        void main() {
-            fragmentColor = vertexColor * texture(texture0, vertexTextureCoordinate);
+        void checkForUpdates() {
+            try {
+            foreach (event; fileWatch.getEvents()) {
+                import std.path;
+                if (event.path.startsWith(shaderName.baseName)) {
+                    update();
+                }
+            }
+            } catch (Exception e) {
+                import std.stdio; writeln(e);
+            }
         }
-    };
+        void use() {
+            program.use();
+        }
+        void update() {
+            program = new Program();
+            import std.file : readText;
+            scope vertexShader = new Shader(Shader.Type.vertex, ("../shaders/" ~ shaderName ~ ".vert").readText);
+            scope fragmentShader = new Shader(Shader.Type.fragment, ("../shaders/" ~ shaderName ~ ".frag").readText);
+            program.link(vertexShader, fragmentShader);
+            program.use();
+        }
+        alias program this;
+    }
 
     // example code https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
     class OGL33RenderVisitor : Visitor
@@ -163,15 +178,11 @@ version (GL_33)
         Window window;
         Shader vertexShader;
         Shader fragmentShader;
-        Program program;
         mat4[] modelViewStack;
+        mat4 projection;
         this(Window window)
         {
             this.window = window;
-            vertexShader = new Shader(Shader.Type.vertex, vertexShaderSource);
-            fragmentShader = new Shader(Shader.Type.fragment, fragmentShaderSource);
-            program = new Program(vertexShader, fragmentShader);
-            program.use();
         }
 
         override void visit(NodeData n)
@@ -218,8 +229,7 @@ version (GL_33)
 
         override void visit(ProjectionGroupData n)
         {
-            program.setUniform("projection",
-                    n.getProjection.getProjectionMatrix(window.getWidth, window.getHeight));
+            projection = n.getProjection.getProjectionMatrix(window.getWidth, window.getHeight);
             visit(cast(GroupData) n);
         }
 
@@ -282,8 +292,6 @@ version (GL_33)
                 return this;
             }
             auto data(T)(T[] data) {
-                import std.stdio; writeln("ebo data: ", data.length);
-                writeln(T.sizeof);
                 GL_ELEMENT_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
                         cast(void*) data.ptr, GL_STATIC_DRAW);
                 checkOglErrors;
@@ -331,8 +339,10 @@ version (GL_33)
                 return this;
             }
         }
-        void prepareBuffers(IndexedInterleavedTriangleArray triangles)
+
+        void prepareBuffers(AppearanceData app, IndexedInterleavedTriangleArray triangles)
         {
+            auto program = cast(FileProgram)app.customData;
             if (auto buffers = cast(IndexedInterleavedTriangleArrayBuffers) triangles.customData) {
                 buffers.bind();
             } else {
@@ -370,13 +380,13 @@ version (GL_33)
                     checkOglErrors();
                 }
 
-                // TODO normals
-
                 triangles.customData = buffers;
             }
         }
-        void prepareBuffers(TriangleArray triangles)
+
+        void prepareBuffers(AppearanceData app, TriangleArray triangles)
         {
+            auto program = cast(FileProgram)app.customData;
             if (auto buffers = cast(TriangleArrayBuffers) triangles.customData)
             {
                 buffers.bind();
@@ -470,27 +480,39 @@ version (GL_33)
             checkOglErrors;
         }
 
+        void activate(AppearanceData appearance) {
+            if (auto program = cast(FileProgram)appearance.customData) {
+                program.use();
+            } else {
+                auto program = new FileProgram(appearance.shaderBase);
+                appearance.customData = program;
+                program.use();
+            }
+            activate(appearance.textures[0]);
+        }
+
         override void visit(ShapeGroupData n)
         {
+            activate(n.appearance.get);
+
+            auto program = cast(FileProgram)n.appearance.get.customData;
+            program.setUniform("projection", projection);
+
             auto mv = modelViewStack[$ - 1];
             program.setUniform("modelView", mv);
             checkOglErrors;
-            if (auto appearance = n.appearance)
-            {
-                activate(appearance.textures[0]);
-            }
 
             if (auto triangles = cast(TriangleArray) n.geometry)
             {
-                prepareBuffers(triangles);
+                prepareBuffers(n.appearance.get, triangles);
                 GL_TRIANGLES.glDrawArrays(0, cast(int) triangles.coordinates.length);
                 checkOglErrors;
             }
 
-            if (auto g = cast(IndexedInterleavedTriangleArray) n.geometry)
+            if (auto triangles = cast(IndexedInterleavedTriangleArray) n.geometry)
             {
-                prepareBuffers(g);
-                GL_TRIANGLES.glDrawElements(cast(int)g.indices.length, GL_UNSIGNED_INT, cast(void*)0);
+                prepareBuffers(n.appearance.get, triangles);
+                GL_TRIANGLES.glDrawElements(cast(int)triangles.indices.length, GL_UNSIGNED_INT, cast(void*)0);
                 checkOglErrors;
             }
         }

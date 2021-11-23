@@ -10,7 +10,8 @@ auto triangle(float rotationSpeed)
 {
     Textures textures;
     auto rotation = TransformationGroup.make("rotation", mat4.identity);
-    auto shape = ShapeGroup.make("triangle", new Triangle("tri"), new Appearance(textures));
+    auto appearance = Appearance.make("position_color", textures);
+    auto shape = ShapeGroup.make("triangle", new Triangle("tri"), appearance);
     rotation.get.addChild(shape);
     float rot = 0.5;
     rotation.get.addChild(IntrusivePtr!Behavior.make("rotY-%s".format(rotationSpeed), {
@@ -33,7 +34,7 @@ auto cube(string name, Texture texture, float x, float y, float z, float rotatio
                   indexed ?
                       new IndexedInterleavedCube("cube(size=1)", 100)
                       : new TriangleArrayCube("cube", 100),
-                  new Appearance(Textures(texture))
+                        Appearance.make("position_color_texture", Textures(texture))
         );
     // dfmt on
     rotation.get.addChild(shape);

@@ -51,10 +51,11 @@ class Files
     }
 }
 
-Shape createTile(string filename, IFImage i)
+ShapeGroup createTile(string filename, IFImage i)
 {
     // dfmt off
-    return new Shape(
+    auto app = Appearance.make("position_texture", Textures(Texture(i)));
+    return ShapeGroup.make(
         filename,
         new IndexedInterleavedTriangleArray(
             filename,
@@ -66,43 +67,43 @@ Shape createTile(string filename, IFImage i)
                     VertexData.Component.TEXTURE_COORDINATES),
                 4,
                 [
-                    0,   0,   1,  0.0f, 1.0f,
-                    i.w, 0,   1,  1.0f, 1.0f,
-                    i.w, i.h, 1,  1.0f, 0.0f,
-                    0,   i.h, 1,  0.0f, 0.0f,
+                    0,   0,   0,  0.0f, 1.0f,
+                    i.w, 0,   0,  1.0f, 1.0f,
+                    i.w, i.h, 0,  1.0f, 0.0f,
+                    0,   i.h, 0,  0.0f, 0.0f,
                 ],
             ),
             [0, 1, 2, 0, 2, 3,],
         ),
-        new Appearance(Textures(Texture(i))),
+        app,
     );
     // dfmt on
 }
 
-void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, shared(Observer) observer)
+void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, Observer observer)
 {
     try
     {
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read " ~ nextFile.name);
-
+        auto o = observer;
         tid.send(cast(shared) {
             try
             {
                 currentImageDimension = vec2(i.w, i.h);
-                auto o = cast() observer;
-                (cast(ParallelProjection)(o.getProjection())).zoom = min(
+                (cast(ParallelProjection)(o.get.getProjection())).zoom = min(
                     windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
-                if (o.childs.length > 0)
+                Node newNode = createTile(nextFile.name, i);
+                if (o.get.childs.length > 0)
                 {
-                    auto shape = (cast(Shape) o.getChild(0));
-                    shape.getAppearance().free;
-                    o.replaceChild(0, createTile(nextFile.name, i));
+                    writeln("replace");
+                    o.get.replaceChild(0, newNode);
                 }
                 else
                 {
-                    o.addChild(createTile(nextFile.name, i));
+                    writeln("add");
+                    o.get.addChild(newNode);
                 }
             }
             catch (Exception e)
@@ -117,7 +118,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, shared(Observer)
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile, shared(Observer) observer)
+void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile, Observer observer)
 {
     loadNextImage(ownerTid, windowSize, nextFile, observer);
 }
@@ -127,7 +128,7 @@ void doZoom(int input, int key, ref float zoom, float newZoom, Observer observer
     if ((input == key) && (action == GLFW_RELEASE))
     {
         zoom = newZoom;
-        observer.setProjection(getProjection(zoom));
+        observer.get.setProjection(getProjection(zoom));
     }
 }
 
@@ -135,10 +136,11 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     float zoom = 1.0;
     float zoomDelta = 0.01;
     auto files = new Files(args.directory);
-    auto scene = new Scene("scene");
+    auto scene = Scene.make("scene");
     auto projection = getProjection(zoom);
-    auto observer = new Observer("observer", projection);
-    scene.addChild(observer);
+    auto observer = Observer.make("observer", projection);
+    observer.get.setPosition(vec3(0, 0, 100));
+    scene.get.addChild(observer);
     auto window = new Window(scene, 800, 600, (Window w, int key, int, int action, int) {
         auto clamp(float v, float minimum, float maximum)
         {
@@ -148,16 +150,16 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
         {
             auto windowSize = vec2(w.getWidth, w.getHeight);
-            auto position = observer.getPosition.xy;
+            auto position = observer.get.getPosition.xy;
             auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
             auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
-            observer.setPosition(vec3(newPosition.x, newPosition.y, observer.getPosition.z));
+            observer.get.setPosition(vec3(newPosition.x, newPosition.y, observer.get.getPosition.z));
         }
 
         void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
         {
             auto scaledImage = imageDimension * zoom;
-            auto position = observer.getPosition + vec3(dx, dy, 0);
+            auto position = observer.get.getPosition + vec3(dx, dy, 0);
 
             if (scaledImage.x <= w.getWidth)
             {
@@ -176,7 +178,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             {
                 position.y = clamp(position.y, 0, (scaledImage.y - w.getHeight) / zoom);
             }
-            observer.setPosition(position);
+            observer.get.setPosition(position);
         }
 
         if (key == 'A')
@@ -203,7 +205,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         {
             auto oldZoom = zoom;
             zoom += zoomDelta;
-            observer.setProjection(getProjection(zoom));
+            observer.get.setProjection(getProjection(zoom));
             zoomImage(w, currentImageDimension, oldZoom, zoom);
             return;
         }
@@ -211,30 +213,30 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         {
             auto oldZoom = zoom;
             zoom -= zoomDelta;
-            observer.setProjection(getProjection(zoom));
+            observer.get.setProjection(getProjection(zoom));
             zoomImage(w, currentImageDimension, oldZoom, zoom);
             return;
         }
         if (key == 'R')
         {
-            observer.forward();
+            observer.get.forward();
             return;
         }
         if (key == 'F')
         {
-            observer.backward();
+            observer.get.backward();
             return;
         }
         if (key == 'P')
         {
-            scene.accept(new PrintVisitor());
+            scene.get.accept(new PrintVisitor());
             return;
         }
         if ((key == 'N') && (action == GLFW_RELEASE))
         {
             files.popFront;
-            spawn(&loadNextImageSpawnable, vec2(w.width, w.height),
-            files.front, cast(shared) observer);
+            //spawn(&loadNextImageSpawnable, vec2(w.width, w.height),
+//                  files.front, observer);
             return;
         }
         doZoom(key, '1', zoom, 1.0 / 16, observer, action);
@@ -249,21 +251,26 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         doZoom(key, '0', zoom, 1.0 * 32, observer, action);
     });
 
-    auto v = new PrintVisitor();
-    scene.accept(v);
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front, cast(shared) observer);
+//    auto v = new PrintVisitor();
+//    scene.get.accept(v);
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front, observer);
 
     import sg.visitors;
 
+    // dfmt off
     Visitor renderVisitor = new TheRenderVisitor(window);
-
-    auto visitors = [renderVisitor, new BehaviorVisitor(),];
+    auto visitors = [
+        // new PrintVisitor(),
+        renderVisitor,
+        new BehaviorVisitor(),
+    ];
+    // dfmt on
 
     while (!glfwWindowShouldClose(window.window))
     {
         foreach (visitor; visitors)
         {
-            scene.accept(visitor);
+            scene.get.accept(visitor);
         }
 
         glfwSwapBuffers(window.window);

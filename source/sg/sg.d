@@ -751,12 +751,14 @@ class TriangleArrayCube : TriangleArray
 
 alias Textures = Vector!Texture;
 
-class Appearance : NodeData
+class AppearanceData : NodeData
 {
     Textures textures;
-    this(Textures textures)
+    string shaderBase;
+    this(string shaderBase, Textures textures)
     {
-        super("app");
+        super(shaderBase);
+        this.shaderBase = shaderBase;
         this.textures = textures;
     }
 
@@ -766,6 +768,8 @@ class Appearance : NodeData
     }
 
 }
+
+alias Appearance = IntrusivePtr!AppearanceData;
 
 class _Texture
 {

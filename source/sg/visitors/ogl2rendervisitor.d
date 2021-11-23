@@ -89,8 +89,10 @@ version (Default)
         override void visit(TransformationGroupData n)
         {
             glPushMatrix();
-            glMultMatrixf(n.getTransformation.transposed.value_ptr);
-            visit(cast(GroupData)n);
+            {
+                glMultMatrixf(n.getTransformation.transposed.value_ptr);
+                visit(cast(GroupData)n);
+            }
             glPopMatrix();
         }
 
@@ -127,9 +129,10 @@ version (Default)
                     image.buf8.ptr // pixels
                     );
             checkOglErrors;
-            glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+            GL_TEXTURE_ENV.glTexEnvf(GL_TEXTURE_ENV_MODE, GL_MODULATE);
             checkOglErrors;
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             checkOglErrors;
             auto result = new TextureName(thisTid, textureName);
             texture.customData = result;
@@ -154,12 +157,15 @@ version (Default)
             checkOglErrors;
         }
 
+        void activate(AppearanceData app) {
+            if (app.textures.length > 0) {
+                activate(app.textures[0]);
+            }
+        }
+
         override void visit(ShapeGroupData n)
         {
-            if (auto appearance = n.appearance)
-            {
-                activate(appearance.textures[0]);
-            }
+            activate(n.appearance.get);
 
             if (auto g = cast(TriangleArray) n.geometry)
             {
@@ -179,25 +185,26 @@ version (Default)
                 glPopClientAttrib();
             }
 
-            if (auto g = cast(IndexedInterleavedTriangleArray) n.geometry)
+            if (auto triangles = cast(IndexedInterleavedTriangleArray) n.geometry)
             {
-                int stride = cast(int)(g.data.tupleSize * float.sizeof);
+                int stride = cast(int)(triangles.data.tupleSize * float.sizeof);
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
                 {
                     glEnableClientState(GL_VERTEX_ARRAY);
-                    glVertexPointer(3, GL_FLOAT, stride, g.data.data.ptr);
+                    glVertexPointer(3, GL_FLOAT, stride, triangles.data.data.ptr);
 
                     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
                     glTexCoordPointer(2, GL_FLOAT, stride,
-                            g.data.data.ptr + g.data.textureCoordinatesOffset);
+                            triangles.data.data.ptr + triangles.data.textureCoordinatesOffset);
 
-                    if (g.data.components.COLORS)
+                    if (triangles.data.components.COLORS)
                     {
                         glEnableClientState(GL_COLOR_ARRAY);
-                        glColorPointer(4, GL_FLOAT, stride, g.data.data.ptr + g.data.colorsOffset);
+                        glColorPointer(4, GL_FLOAT, stride, triangles.data.data.ptr + triangles.data.colorsOffset);
                     }
-                    glDrawElements(GL_TRIANGLES, cast(int) g.indices.length,
-                            GL_UNSIGNED_INT, g.indices.ptr);
+
+                    glDrawElements(GL_TRIANGLES, cast(int) triangles.indices.length,
+                            GL_UNSIGNED_INT, triangles.indices.ptr);
                 }
                 glPopClientAttrib();
             }
