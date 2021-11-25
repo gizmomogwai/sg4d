@@ -167,7 +167,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             }
             else
             {
-                position.x = clamp(position.x, 0, (scaledImage.x - w.getWidth) / zoom);
+                position.x = clamp(position.x, 0, imageDimension.x - w.getWidth/zoom);
             }
 
             if (scaledImage.y <= w.getHeight)
@@ -176,7 +176,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             }
             else
             {
-                position.y = clamp(position.y, 0, (scaledImage.y - w.getHeight) / zoom);
+                position.y = clamp(position.y, 0, imageDimension.y - w.getHeight/zoom);
             }
             observer.get.setPosition(position);
         }
