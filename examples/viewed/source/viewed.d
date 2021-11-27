@@ -10,8 +10,6 @@ static struct Args
     string directory = ".";
 }
 
-vec2 currentImageDimension;
-
 Projection getProjection(float zoom)
 {
     return new ParallelProjection(1, 1000, zoom);
@@ -80,37 +78,36 @@ ShapeGroup createTile(string filename, IFImage i)
     // dfmt on
 }
 
-void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, Observer observer)
+void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
         auto i = read_image(nextFile.name);
-        (!i.e).enforce("Cannot read " ~ nextFile.name);
-        auto o = observer;
-        tid.send(cast(shared) {
+        (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
+        tid.send(cast(shared) (ObserverData o, ref vec2 currentImageDimension)  {
             try
             {
                 currentImageDimension = vec2(i.w, i.h);
-                (cast(ParallelProjection)(o.get.getProjection())).zoom = min(
+
+                (cast(ParallelProjection)(o.getProjection())).zoom = min(
                     windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
                 Node newNode = createTile(nextFile.name, i);
-                if (o.get.childs.length > 0)
+                if (o.childs.length > 0)
                 {
-                    writeln("replace");
-                    o.get.replaceChild(0, newNode);
+                    o.replaceChild(0, newNode);
                 }
                 else
                 {
-                    writeln("add");
-                    o.get.addChild(newNode);
-                }
+                    o.addChild(newNode);
+                    }
             }
             catch (Exception e)
             {
                 writeln(e);
             }
         });
+
     }
     catch (Exception e)
     {
@@ -118,9 +115,9 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile, Observer observe
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile, Observer observer)
+void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
 {
-    loadNextImage(ownerTid, windowSize, nextFile, observer);
+    loadNextImage(ownerTid, windowSize, nextFile);
 }
 
 void doZoom(int input, int key, ref float zoom, float newZoom, Observer observer, int action)
@@ -133,6 +130,7 @@ void doZoom(int input, int key, ref float zoom, float newZoom, Observer observer
 }
 
 mixin Main.parseCLIArgs!(Args, (Args args) {
+    vec2 currentImageDimension;
     float zoom = 1.0;
     float zoomDelta = 0.01;
     auto files = new Files(args.directory);
@@ -235,8 +233,9 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         if ((key == 'N') && (action == GLFW_RELEASE))
         {
             files.popFront;
-            //spawn(&loadNextImageSpawnable, vec2(w.width, w.height),
-//                  files.front, observer);
+            spawn(&loadNextImageSpawnable,
+                  vec2(w.width, w.height),
+                  files.front);
             return;
         }
         doZoom(key, '1', zoom, 1.0 / 16, observer, action);
@@ -251,16 +250,13 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         doZoom(key, '0', zoom, 1.0 * 32, observer, action);
     });
 
-//    auto v = new PrintVisitor();
-//    scene.get.accept(v);
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front, observer);
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front);
 
     import sg.visitors;
 
     // dfmt off
     Visitor renderVisitor = new TheRenderVisitor(window);
     auto visitors = [
-        // new PrintVisitor(),
         renderVisitor,
         new BehaviorVisitor(),
     ];
@@ -277,8 +273,15 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
 
         // poll glfw and scene graph "events"
         glfwPollEvents();
-        receiveTimeout(msecs(-1), (shared void delegate() codeForOglThread) {
-            codeForOglThread();
-        });
+        receiveTimeout(msecs(-1),
+
+                       (shared void delegate(ObserverData o, ref vec2 imageDimension) codeForOglThread) {
+                           codeForOglThread(observer.get, currentImageDimension);
+                       },
+
+                       (shared void delegate() codeForOglThread) {
+                           codeForOglThread();
+                       },
+        );
     }
 });
