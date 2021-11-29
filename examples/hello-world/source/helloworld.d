@@ -8,9 +8,9 @@ import autoptr.intrusive_ptr;
 
 auto triangle(float rotationSpeed)
 {
-    Textures textures;
+    Texture[] textures;
     auto rotation = TransformationGroup.make("rotation", mat4.identity);
-    auto appearance = Appearance.make("position_color", textures);
+    auto appearance = Appearance.make("position_color_texture", textures);
     auto shape = ShapeGroup.make("triangle", new Triangle("tri"), appearance);
     rotation.get.addChild(shape);
     float rot = 0.5;
@@ -25,16 +25,16 @@ auto triangle(float rotationSpeed)
 
 auto cube(string name, Texture texture, float x, float y, float z, float rotationSpeed, bool indexed)
 {
-    auto translation = TransformationGroup.make("translation-" ~ name,
-            mat4.translation(x, y, z));
+    auto translation = TransformationGroup.make("translation-" ~ name, mat4.translation(x, y, z));
     auto rotation = TransformationGroup.make("rotation-" ~ name, mat4.identity());
+    Texture[] textures = [texture];
     // dfmt off
     auto shape =
         ShapeGroup.make("cube-" ~ name,
                   indexed ?
                       new IndexedInterleavedCube("cube(size=1)", 100)
                       : new TriangleArrayCube("cube", 100),
-                        Appearance.make("position_color_texture", Textures(texture))
+                        Appearance.make("position_color_texture", textures)
         );
     // dfmt on
     rotation.get.addChild(shape);
@@ -104,15 +104,15 @@ void main(string[] args)
     {
         observer.get.setPosition(vec3(-window.getWidth() / 2, -window.getHeight() / 2, 300));
         auto image1 = read_image("image1.jpg");
-        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, true));
-        observer.get.addChild(cube("cube", Texture(image1), -200, 0, 0, 0.0005, false));
+        observer.get.addChild(cube("cube", Texture.make(image1), 0, 0, 0, 0.001, true));
+        observer.get.addChild(cube("cube", Texture.make(image1), -200, 0, 0, 0.0005, false));
     }
     else if (cast(CameraProjection) projection)
     {
         observer.get.setPosition(vec3(0, 0, 300));
         auto image1 = read_image("image1.jpg");
-        observer.get.addChild(cube("cube", Texture(image1), 0, 0, 0, 0.001, true));
-        observer.get.addChild(cube("cube", Texture(image1), -200, 0, 0, 0.0005, false));
+        observer.get.addChild(cube("cube", Texture.make(image1), 0, 0, 0, 0.001, true));
+        observer.get.addChild(cube("cube", Texture.make(image1), -200, 0, 0, 0.0005, false));
     }
     else if (cast(IdentityProjection) projection)
     {

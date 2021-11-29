@@ -411,14 +411,17 @@ version (GL_33)
         void prepareBuffers(AppearanceData app, IndexedInterleavedTriangleArray triangles)
         {
             auto rcProgram = dynCast!(FileProgramData)(app.customData);
-            if (rcProgram == null) {throw new Exception("no program");
-            }
-            auto program = rcProgram.get;
-            auto rcBuffers = dynCast!(IndexedInterleavedTriangleArrayBuffersData)(triangles.customData);
+            (rcProgram != null).enforce("no program");
 
-            if (rcBuffers == null)
+            auto program = rcProgram.get;
+
+            if (auto rcBuffers = dynCast!(IndexedInterleavedTriangleArrayBuffersData)(triangles.customData))
             {
-                rcBuffers = IndexedInterleavedTriangleArrayBuffers.make();
+                rcBuffers.get.bind();
+            }
+            else
+            {
+                auto rcBuffers = IndexedInterleavedTriangleArrayBuffers.make();
                 auto buffers = rcBuffers.get.bind();
                 buffers.indexData.bind.data(triangles.indices);
 
@@ -453,8 +456,6 @@ version (GL_33)
                 }
 
                 triangles.customData = rcBuffers;
-            } else {
-                rcBuffers.get.bind();
             }
         }
 
@@ -462,9 +463,9 @@ version (GL_33)
         {
             auto rcProgram = dynCast!(FileProgramData)(app.customData);
             auto program = rcProgram.get;
-            if (auto buffers = dynCast!(TriangleArrayBuffersData)(triangles.customData))
+            if (auto rcBuffers = dynCast!(TriangleArrayBuffersData)(triangles.customData))
             {
-                buffers.get.bind();
+                rcBuffers.get.bind();
             }
             else
             {
