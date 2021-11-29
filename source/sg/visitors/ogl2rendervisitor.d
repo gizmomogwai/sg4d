@@ -9,6 +9,27 @@ version (Default)
     import std.concurrency;
     import std.stdio;
 
+    import autoptr.common;
+    import autoptr.intrusive_ptr;
+
+    alias TextureName = IntrusivePtr!TextureNameData;
+    class TextureNameData : CustomDataData
+    {
+        Tid renderThread;
+        GLuint textureName;
+        this(Tid renderThread, GLuint textureName)
+        {
+            this.renderThread = renderThread;
+            this.textureName = textureName;
+        }
+        ~this() {
+            if (thisTid == renderThread) {
+                1.glDeleteTextures(&textureName);
+            } else {
+                throw new Exception("destructor should be called in render thread");
+            }
+        }
+    }
     // opengl version till 2.1
     /++
      + https://austinmorlan.com/posts/opengl_matrices/
@@ -91,24 +112,12 @@ version (Default)
             glPushMatrix();
             {
                 glMultMatrixf(n.getTransformation.transposed.value_ptr);
-                visit(cast(GroupData)n);
+                visit(cast(GroupData) n);
             }
             glPopMatrix();
         }
 
-        class TextureName : CustomData
-        {
-            Tid renderThread;
-            GLuint textureName;
-            this(Tid renderThread, GLuint textureName)
-            {
-                this.renderThread = renderThread;
-                this.textureName = textureName;
-            }
-
-        }
-
-        private TextureName createAndLoadTexture(Texture texture)
+        private TextureName createAndLoadTexture(TextureData texture)
         {
             auto image = texture.image;
             GLuint textureName;
@@ -134,12 +143,13 @@ version (Default)
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             checkOglErrors;
-            auto result = new TextureName(thisTid, textureName);
+
+            auto result = TextureName.make(thisTid, textureName);
             texture.customData = result;
             return result;
         }
 
-        private void activate(Texture texture)
+        private void activate(TextureData texture)
         {
             glEnable(GL_TEXTURE_2D);
             checkOglErrors;
@@ -148,18 +158,21 @@ version (Default)
             checkOglErrors;
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.wrapT ? GL_REPEAT : GL_CLAMP);
             checkOglErrors;
-            // dfmt off
-            auto textureName = cast(TextureName) texture.customData is null ?
-                createAndLoadTexture(texture)
-                : cast(TextureName) texture.customData;
-            // dfmt on
-            glBindTexture(GL_TEXTURE_2D, textureName.textureName);
+
+            auto textureName = dynCast!(TextureNameData)(texture.customData);
+            if (textureName == null) {
+                textureName = createAndLoadTexture(texture);
+            }
+
+            glBindTexture(GL_TEXTURE_2D, textureName.get.textureName);
             checkOglErrors;
         }
 
-        void activate(AppearanceData app) {
-            if (app.textures.length > 0) {
-                activate(app.textures[0]);
+        void activate(AppearanceData app)
+        {
+            if (app.textures.length > 0)
+            {
+                activate(app.textures[0].get);
             }
         }
 
@@ -200,7 +213,8 @@ version (Default)
                     if (triangles.data.components.COLORS)
                     {
                         glEnableClientState(GL_COLOR_ARRAY);
-                        glColorPointer(4, GL_FLOAT, stride, triangles.data.data.ptr + triangles.data.colorsOffset);
+                        glColorPointer(4, GL_FLOAT, stride,
+                                triangles.data.data.ptr + triangles.data.colorsOffset);
                     }
 
                     glDrawElements(GL_TRIANGLES, cast(int) triangles.indices.length,

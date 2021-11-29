@@ -6,7 +6,6 @@
 // http://www.lighthouse3d.com/tutorials/glsl-tutorial/hello-world/
 module sg.sg;
 
-import automem;
 import autoptr.common;
 import autoptr.intrusive_ptr;
 import optional;
@@ -63,10 +62,16 @@ int glGetInt(GLenum what)
     return result;
 }
 
-class CustomData
-{
+
+alias CustomData = IntrusivePtr!CustomDataData;
+class CustomDataData {
+    SharedControlType referenceCounter;
+    ~this() {
+    }
 }
 
+
+alias Node = IntrusivePtr!NodeData;
 class NodeData
 {
     SharedControlType referenceCounter;
@@ -81,7 +86,10 @@ class NodeData
     {
         name = _name;
     }
-    ~this() {}
+
+    ~this()
+    {
+    }
 
     auto getName()
     {
@@ -112,8 +120,7 @@ class NodeData
     }
 }
 
-alias Node = IntrusivePtr!NodeData;
-
+alias Group = IntrusivePtr!GroupData;
 class GroupData : NodeData
 {
     Node[] childs;
@@ -123,8 +130,10 @@ class GroupData : NodeData
         super(name);
     }
 
-    ~this() {
-        foreach (ref child; childs) {
+    ~this()
+    {
+        foreach (ref child; childs)
+        {
             child.exchange(null);
         }
     }
@@ -170,14 +179,14 @@ class GroupData : NodeData
     override void setRenderThread(Tid tid)
     {
         super.setRenderThread(tid);
-        foreach (child; childs) {
+        foreach (child; childs)
+        {
             child.get.setRenderThread(tid);
         }
     }
 }
 
-alias Group = IntrusivePtr!GroupData;
-
+alias Scene = IntrusivePtr!SceneData;
 class SceneData : GroupData
 {
     this(string _name)
@@ -191,8 +200,7 @@ class SceneData : GroupData
     }
 }
 
-alias Scene = IntrusivePtr!SceneData;
-
+alias ProjectionGroup = IntrusivePtr!ProjectionGroupData;
 class ProjectionGroupData : GroupData
 {
     private Projection projection;
@@ -201,6 +209,7 @@ class ProjectionGroupData : GroupData
         super(_name);
         this.projection = projection;
     }
+
     override void accept(Visitor v)
     {
         v.visit(this);
@@ -220,7 +229,6 @@ class ProjectionGroupData : GroupData
     }
 }
 
-alias ProjectionGroup = IntrusivePtr!ProjectionGroupData;
 
 abstract class Projection
 {
@@ -281,6 +289,7 @@ class CameraProjection : Projection
     }
 }
 
+alias Observer = IntrusivePtr!ObserverData;
 class ObserverData : ProjectionGroupData
 {
     private vec3 position = vec3(0, 0, 0);
@@ -329,8 +338,8 @@ class ObserverData : ProjectionGroupData
     }
 }
 
-alias Observer = IntrusivePtr!ObserverData;
 
+alias TransformationGroup = IntrusivePtr!TransformationGroupData;
 class TransformationGroupData : GroupData
 {
     private mat4 transformation;
@@ -340,6 +349,7 @@ class TransformationGroupData : GroupData
         super(_name);
         this.transformation = transformation;
     }
+
     override void accept(Visitor v)
     {
         v.visit(this);
@@ -359,7 +369,6 @@ class TransformationGroupData : GroupData
     }
 }
 
-alias TransformationGroup = IntrusivePtr!TransformationGroupData;
 
 class Geometry : NodeData
 {
@@ -568,11 +577,11 @@ class Triangle : TriangleArray
     this(string name)
     {
         super(name, Type.ARRAY, [
-                  vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(0.0, 0.5, 0.0),
-              ], [
-                  vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0),
-                  vec4(0.0, 0.0, 1.0, 1.0),
-              ], [vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0),],);
+                vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(0.0, 0.5, 0.0),
+                ], [
+                vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0),
+                vec4(0.0, 0.0, 1.0, 1.0),
+                ], [vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0),],);
     }
 }
 
@@ -749,17 +758,24 @@ class TriangleArrayCube : TriangleArray
     }
 }
 
-alias Textures = Vector!Texture;
-
+alias Appearance = IntrusivePtr!AppearanceData;
 class AppearanceData : NodeData
 {
-    Textures textures;
+    Texture[] textures;
     string shaderBase;
-    this(string shaderBase, Textures textures)
+    this(string shaderBase, Texture[] textures)
     {
         super(shaderBase);
         this.shaderBase = shaderBase;
         this.textures = textures;
+    }
+
+    ~this()
+    {
+        foreach (ref texture; textures)
+        {
+            texture.exchange(null);
+        }
     }
 
     void setTexture(size_t index, Texture t)
@@ -769,9 +785,8 @@ class AppearanceData : NodeData
 
 }
 
-alias Appearance = IntrusivePtr!AppearanceData;
-
-class _Texture
+alias Texture = IntrusivePtr!TextureData;
+class TextureData : NodeData
 {
     IFImage image;
     bool wrapS;
@@ -779,15 +794,18 @@ class _Texture
     CustomData customData = null;
     this(IFImage image, bool wrapS = false, bool wrapT = false)
     {
+        super("texture");
         this.image = image;
         this.wrapS = wrapS;
         this.wrapT = wrapT;
     }
 
+    ~this()
+    {
+    }
 }
 
-alias Texture = RefCounted!(_Texture);
-
+alias ShapeGroup = IntrusivePtr!ShapeGroupData;
 class ShapeGroupData : GroupData
 {
     Geometry geometry;
@@ -797,6 +815,10 @@ class ShapeGroupData : GroupData
         super(name);
         this.geometry = geometry;
         this.appearance = appearance;
+    }
+
+    ~this()
+    {
     }
 
     override void accept(Visitor v)
@@ -821,10 +843,7 @@ class ShapeGroupData : GroupData
         ensureRenderThread;
         this.appearance = appearance;
     }
-
 }
-
-alias ShapeGroup = IntrusivePtr!ShapeGroupData;
 
 class Behavior : GroupData
 {

@@ -5,6 +5,7 @@ module sg.visitors.ogl33rendervisitor;
 
 version (GL_33)
 {
+    import std;
     import sg;
     import sg.visitors;
     import sg.window;
@@ -12,10 +13,29 @@ version (GL_33)
     import std.conv;
     import std.exception;
     import std.string;
+    import autoptr.common;
+    import autoptr.intrusive_ptr;
+
+    alias TextureName = IntrusivePtr!TextureNameData;
+    class TextureNameData : CustomDataData
+    {
+        Tid renderThread;
+        GLuint textureName;
+        this(Tid renderThread)
+        {
+            this.renderThread = renderThread;
+            1.glGenTextures(&textureName);
+            checkOglErrors;
+        }
+
+        ~this() {
+            (thisTid == renderThread).enforce("Destructor should be called in renderthread");
+            1.glDeleteTextures(&textureName);
+            checkOglErrors;
+        }
+    }
 
     // adapted from https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
-
-    ///
     final class Shader
     {
         enum Type
@@ -71,17 +91,22 @@ version (GL_33)
         GLuint[string] attributesCache;
         GLuint[string] uniformsCache;
 
-        this() {
+        this()
+        {
             program = glCreateProgram();
             (program != 0).enforce("Cannot create program");
         }
-        void destroy() {
+
+        void destroy()
+        {
             program.glDeleteProgram;
             checkOglErrors;
         }
 
-        void link(Shader[] shaders...) {
-            foreach (shader; shaders) {
+        void link(Shader[] shaders...)
+        {
+            foreach (shader; shaders)
+            {
                 program.glAttachShader(shader.shader);
             }
             program.glLinkProgram();
@@ -133,41 +158,177 @@ version (GL_33)
         }
     }
 
-    class FileProgram : CustomData {
+    alias FileProgram = IntrusivePtr!FileProgramData;
+    class FileProgramData : CustomDataData
+    {
         import fswatch;
+
         string shaderName;
         Program program;
         FileWatch fileWatch;
-        this(string shaderName) {
+        this(string shaderName)
+        {
             this.shaderName = shaderName;
             this.fileWatch = FileWatch("../shaders", true);
             update();
         }
+        ~this() {
+            writeln("free program");
+        }
 
-        void checkForUpdates() {
-            try {
-            foreach (event; fileWatch.getEvents()) {
-                import std.path;
-                if (event.path.startsWith(shaderName.baseName)) {
-                    update();
+        void checkForUpdates()
+        {
+            try
+            {
+                foreach (event; fileWatch.getEvents())
+                {
+                    import std.path;
+
+                    if (event.path.startsWith(shaderName.baseName))
+                    {
+                        update();
+                    }
                 }
             }
-            } catch (Exception e) {
-                import std.stdio; writeln(e);
+            catch (Exception e)
+            {
+                import std.stdio;
+
+                writeln(e);
             }
         }
-        void use() {
+
+        void use()
+        {
             program.use();
         }
-        void update() {
+
+        void update()
+        {
             program = new Program();
             import std.file : readText;
-            scope vertexShader = new Shader(Shader.Type.vertex, ("../shaders/" ~ shaderName ~ ".vert").readText);
-            scope fragmentShader = new Shader(Shader.Type.fragment, ("../shaders/" ~ shaderName ~ ".frag").readText);
+
+            scope vertexShader = new Shader(Shader.Type.vertex,
+                    ("../shaders/" ~ shaderName ~ ".vert").readText);
+            scope fragmentShader = new Shader(Shader.Type.fragment,
+                    ("../shaders/" ~ shaderName ~ ".frag").readText);
             program.link(vertexShader, fragmentShader);
             program.use();
         }
+
         alias program this;
+    }
+
+    class VAO
+    {
+        GLuint vertexArray;
+        this()
+        {
+            1.glGenVertexArrays(&vertexArray);
+            checkOglErrors;
+        }
+
+        auto bind()
+        {
+            vertexArray.glBindVertexArray();
+            checkOglErrors;
+            return this;
+        }
+    }
+
+    class VBO
+    {
+        GLuint buffer;
+        this()
+        {
+            1.glGenBuffers(&buffer);
+            checkOglErrors;
+        }
+
+        auto bind()
+        {
+            GL_ARRAY_BUFFER.glBindBuffer(buffer);
+            checkOglErrors;
+            return this;
+        }
+
+        auto data(T)(T[] data)
+        {
+            GL_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
+                    cast(void*) data.ptr, GL_STATIC_DRAW);
+            checkOglErrors;
+            return this;
+        }
+    }
+
+    class EBO
+    {
+        GLuint indexArray;
+        this()
+        {
+            1.glGenBuffers(&indexArray);
+            checkOglErrors;
+        }
+
+        auto bind()
+        {
+            GL_ELEMENT_ARRAY_BUFFER.glBindBuffer(indexArray);
+            return this;
+        }
+
+        auto data(T)(T[] data)
+        {
+            GL_ELEMENT_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
+                    cast(void*) data.ptr, GL_STATIC_DRAW);
+            checkOglErrors;
+            return this;
+        }
+    }
+
+    alias TriangleArrayBuffers = IntrusivePtr!TriangleArrayBuffersData;
+    class TriangleArrayBuffersData : CustomDataData
+    {
+        VAO vao;
+        VBO positions;
+        VBO colors;
+        VBO textureCoordinates;
+        this()
+        {
+            vao = new VAO();
+            positions = new VBO();
+            colors = new VBO();
+            textureCoordinates = new VBO();
+        }
+        ~this() {
+            writeln("free triangle array buffers");
+        }
+
+        auto bind()
+        {
+            vao.bind();
+            return this;
+        }
+    }
+    alias IndexedInterleavedTriangleArrayBuffers = IntrusivePtr!IndexedInterleavedTriangleArrayBuffersData;
+    class IndexedInterleavedTriangleArrayBuffersData : CustomDataData
+    {
+        VAO vao;
+        VBO vertexData;
+        EBO indexData;
+        this()
+        {
+            vao = new VAO();
+            vertexData = new VBO();
+            indexData = new EBO();
+        }
+        ~this() {
+            writeln("free indexedinterleavedtrianglearraybuffers");
+        }
+        auto bind()
+        {
+            vao.bind();
+            return this;
+        }
     }
 
     // example code https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
@@ -243,157 +404,72 @@ version (GL_33)
         {
             auto old = modelViewStack;
             modelViewStack ~= modelViewStack[$ - 1] * n.getTransformation;
-            visit(cast(GroupData)n);
+            visit(cast(GroupData) n);
             modelViewStack = old;
-        }
-
-        class TriangleArrayBuffers : CustomData
-        {
-            VAO vao;
-            VBO positions;
-            VBO colors;
-            VBO textureCoordinates;
-            this()
-            {
-                vao = new VAO();
-                positions = new VBO();
-                colors = new VBO();
-                textureCoordinates = new VBO();
-            }
-
-            auto bind()
-            {
-                vao.bind();
-                return this;
-            }
-        }
-        class IndexedInterleavedTriangleArrayBuffers : CustomData {
-            VAO vao;
-            VBO vertexData;
-            EBO indexData;
-            this() {
-                vao = new VAO();
-                vertexData = new VBO();
-                indexData = new EBO();
-            }
-            auto bind() {
-                vao.bind();
-                return this;
-            }
-        }
-        class EBO {
-            GLuint indexArray;
-            this() {
-                1.glGenBuffers(&indexArray);
-                checkOglErrors;
-            }
-            auto bind() {
-                GL_ELEMENT_ARRAY_BUFFER.glBindBuffer(indexArray);
-                return this;
-            }
-            auto data(T)(T[] data) {
-                GL_ELEMENT_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
-                        cast(void*) data.ptr, GL_STATIC_DRAW);
-                checkOglErrors;
-                return this;
-            }
-        }
-        class VAO
-        {
-            GLuint vertexArray;
-            this()
-            {
-                1.glGenVertexArrays(&vertexArray);
-                checkOglErrors;
-            }
-
-            auto bind()
-            {
-                vertexArray.glBindVertexArray();
-                checkOglErrors;
-                return this;
-            }
-        }
-
-        class VBO
-        {
-            GLuint buffer;
-            this()
-            {
-                1.glGenBuffers(&buffer);
-                checkOglErrors;
-            }
-
-            auto bind()
-            {
-                GL_ARRAY_BUFFER.glBindBuffer(buffer);
-                checkOglErrors;
-                return this;
-            }
-
-            auto data(T)(T[] data)
-            {
-                GL_ARRAY_BUFFER.glBufferData(data.length * T.sizeof,
-                        cast(void*) data.ptr, GL_STATIC_DRAW);
-                checkOglErrors;
-                return this;
-            }
         }
 
         void prepareBuffers(AppearanceData app, IndexedInterleavedTriangleArray triangles)
         {
-            auto program = cast(FileProgram)app.customData;
-            if (auto buffers = cast(IndexedInterleavedTriangleArrayBuffers) triangles.customData) {
-                buffers.bind();
-            } else {
-                auto buffers = new IndexedInterleavedTriangleArrayBuffers().bind();
+            auto rcProgram = dynCast!(FileProgramData)(app.customData);
+            if (rcProgram == null) {throw new Exception("no program");
+            }
+            auto program = rcProgram.get;
+            auto rcBuffers = dynCast!(IndexedInterleavedTriangleArrayBuffersData)(triangles.customData);
 
+            if (rcBuffers == null)
+            {
+                rcBuffers = IndexedInterleavedTriangleArrayBuffers.make();
+                auto buffers = rcBuffers.get.bind();
                 buffers.indexData.bind.data(triangles.indices);
 
                 buffers.vertexData.bind.data(triangles.data.data);
-
                 auto position = program.getAttribute("position");
                 position.glVertexAttribPointer(3, GL_FLOAT, GL_FALSE,
-                                               cast(int)(triangles.data.tupleSize * float.sizeof),
-                                               cast(void*)0);
+                        cast(int)(triangles.data.tupleSize * float.sizeof), cast(void*) 0);
                 checkOglErrors();
                 position.glEnableVertexAttribArray();
                 checkOglErrors();
 
-                if (triangles.data.components.COLORS) {
+                if (triangles.data.components.COLORS)
+                {
                     auto color = program.getAttribute("color");
                     color.glVertexAttribPointer(4, GL_FLOAT, GL_FALSE,
-                                                cast(int)(triangles.data.tupleSize * float.sizeof),
-                                                cast(void*)(triangles.data.colorsOffset*float.sizeof));
+                            cast(int)(triangles.data.tupleSize * float.sizeof),
+                            cast(void*)(triangles.data.colorsOffset * float.sizeof));
                     checkOglErrors();
                     color.glEnableVertexAttribArray();
                     checkOglErrors();
                 }
 
-                if (triangles.data.components.TEXTURE_COORDINATES) {
+                if (triangles.data.components.TEXTURE_COORDINATES)
+                {
                     auto textureCoordinate = program.getAttribute("textureCoordinate");
                     textureCoordinate.glVertexAttribPointer(2, GL_FLOAT, GL_FALSE,
-                                                            cast(int)(triangles.data.tupleSize * float.sizeof),
-                                                            cast(void*)(triangles.data.textureCoordinatesOffset*float.sizeof));
+                            cast(int)(triangles.data.tupleSize * float.sizeof),
+                            cast(void*)(triangles.data.textureCoordinatesOffset * float.sizeof));
                     checkOglErrors();
                     textureCoordinate.glEnableVertexAttribArray();
                     checkOglErrors();
                 }
 
-                triangles.customData = buffers;
+                triangles.customData = rcBuffers;
+            } else {
+                rcBuffers.get.bind();
             }
         }
 
         void prepareBuffers(AppearanceData app, TriangleArray triangles)
         {
-            auto program = cast(FileProgram)app.customData;
-            if (auto buffers = cast(TriangleArrayBuffers) triangles.customData)
+            auto rcProgram = dynCast!(FileProgramData)(app.customData);
+            auto program = rcProgram.get;
+            if (auto buffers = dynCast!(TriangleArrayBuffersData)(triangles.customData))
             {
-                buffers.bind();
+                buffers.get.bind();
             }
             else
             {
-                auto buffers = new TriangleArrayBuffers().bind();
+                auto rcBuffers = TriangleArrayBuffers.make();
+                auto buffers = rcBuffers.get.bind();
 
                 buffers.positions.bind.data(triangles.coordinates);
                 auto position = program.getAttribute("position");
@@ -419,27 +495,15 @@ version (GL_33)
                 textureCoordinate.glEnableVertexAttribArray();
                 checkOglErrors;
 
-                triangles.customData = buffers;
+                triangles.customData = rcBuffers;
             }
         }
 
-        class TextureName : CustomData
-        {
-            GLuint textureName;
-            this(GLuint textureName)
-            {
-                this.textureName = textureName;
-            }
-
-        }
-
-        private TextureName createAndLoadTexture(Texture texture)
+        private TextureName createAndLoadTexture(TextureData texture)
         {
             auto image = texture.image;
-            GLuint textureName;
-            1.glGenTextures(&textureName);
-            checkOglErrors;
-            GL_TEXTURE_2D.glBindTexture(textureName);
+            auto result = TextureName.make(thisTid);
+            GL_TEXTURE_2D.glBindTexture(result.get.textureName);
             checkOglErrors;
             GL_UNPACK_ALIGNMENT.glPixelStorei(1);
             checkOglErrors;
@@ -457,12 +521,11 @@ version (GL_33)
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             checkOglErrors;
-            auto result = new TextureName(textureName);
             texture.customData = result;
             return result;
         }
 
-        private void activate(Texture texture)
+        private void activate(TextureData texture)
         {
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_WRAP_S, texture.wrapS
                     ? GL_REPEAT : GL_CLAMP_TO_EDGE);
@@ -471,35 +534,36 @@ version (GL_33)
                     ? GL_REPEAT : GL_CLAMP_TO_EDGE);
             checkOglErrors;
             // dfmt off
-            auto textureName = cast(TextureName) texture.customData is null ?
-                createAndLoadTexture(texture)
-                : cast(TextureName) texture.customData;
+            auto textureName = dynCast!(TextureNameData)(texture.customData);
+            if (textureName == null) {
+                textureName = createAndLoadTexture(texture);
+            }
             // dfmt on
             GL_TEXTURE0.glActiveTexture();
-            GL_TEXTURE_2D.glBindTexture(textureName.textureName);
+            GL_TEXTURE_2D.glBindTexture(textureName.get.textureName);
             checkOglErrors;
         }
 
-        void activate(AppearanceData appearance) {
-            if (auto program = cast(FileProgram)appearance.customData) {
-                program.use();
-            } else {
-                auto program = new FileProgram(appearance.shaderBase);
+        void activate(AppearanceData appearance)
+        {
+            auto program = dynCast!(FileProgramData)(appearance.customData);
+            if (program == null) {
+                program = FileProgram.make(appearance.shaderBase);
                 appearance.customData = program;
-                program.use();
             }
-            activate(appearance.textures[0]);
+            program.get.use();
+            activate(appearance.textures[0].get);
         }
 
         override void visit(ShapeGroupData n)
         {
             activate(n.appearance.get);
 
-            auto program = cast(FileProgram)n.appearance.get.customData;
-            program.setUniform("projection", projection);
+            auto program = dynCast!(FileProgramData)(n.appearance.get.customData);
+            program.get.setUniform("projection", projection);
 
             auto mv = modelViewStack[$ - 1];
-            program.setUniform("modelView", mv);
+            program.get.setUniform("modelView", mv);
             checkOglErrors;
 
             if (auto triangles = cast(TriangleArray) n.geometry)
@@ -512,7 +576,8 @@ version (GL_33)
             if (auto triangles = cast(IndexedInterleavedTriangleArray) n.geometry)
             {
                 prepareBuffers(n.appearance.get, triangles);
-                GL_TRIANGLES.glDrawElements(cast(int)triangles.indices.length, GL_UNSIGNED_INT, cast(void*)0);
+                GL_TRIANGLES.glDrawElements(cast(int) triangles.indices.length,
+                        GL_UNSIGNED_INT, cast(void*) 0);
                 checkOglErrors;
             }
         }

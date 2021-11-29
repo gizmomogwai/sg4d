@@ -51,8 +51,9 @@ class Files
 
 ShapeGroup createTile(string filename, IFImage i)
 {
+    Texture[] textures = [Texture.make(i)];
     // dfmt off
-    auto app = Appearance.make("position_texture", Textures(Texture(i)));
+    auto app = Appearance.make("position_texture", textures);
     return ShapeGroup.make(
         filename,
         new IndexedInterleavedTriangleArray(
@@ -84,7 +85,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
     {
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
-        tid.send(cast(shared) (ObserverData o, ref vec2 currentImageDimension)  {
+        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension) {
             try
             {
                 currentImageDimension = vec2(i.w, i.h);
@@ -100,7 +101,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
                 else
                 {
                     o.addChild(newNode);
-                    }
+                }
             }
             catch (Exception e)
             {
@@ -151,7 +152,8 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             auto position = observer.get.getPosition.xy;
             auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
             auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
-            observer.get.setPosition(vec3(newPosition.x, newPosition.y, observer.get.getPosition.z));
+            observer.get.setPosition(vec3(newPosition.x, newPosition.y,
+            observer.get.getPosition.z));
         }
 
         void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
@@ -165,7 +167,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             }
             else
             {
-                position.x = clamp(position.x, 0, imageDimension.x - w.getWidth/zoom);
+                position.x = clamp(position.x, 0, imageDimension.x - w.getWidth / zoom);
             }
 
             if (scaledImage.y <= w.getHeight)
@@ -174,7 +176,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             }
             else
             {
-                position.y = clamp(position.y, 0, imageDimension.y - w.getHeight/zoom);
+                position.y = clamp(position.y, 0, imageDimension.y - w.getHeight / zoom);
             }
             observer.get.setPosition(position);
         }
@@ -233,9 +235,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         if ((key == 'N') && (action == GLFW_RELEASE))
         {
             files.popFront;
-            spawn(&loadNextImageSpawnable,
-                  vec2(w.width, w.height),
-                  files.front);
+            spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
         doZoom(key, '1', zoom, 1.0 / 16, observer, action);
@@ -273,15 +273,15 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
 
         // poll glfw and scene graph "events"
         glfwPollEvents();
+        // dfmt off
         receiveTimeout(msecs(-1),
-
                        (shared void delegate(ObserverData o, ref vec2 imageDimension) codeForOglThread) {
                            codeForOglThread(observer.get, currentImageDimension);
                        },
-
                        (shared void delegate() codeForOglThread) {
                            codeForOglThread();
                        },
         );
+        // dfmt on
     }
 });
