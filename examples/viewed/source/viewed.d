@@ -22,10 +22,7 @@ class Files
     this(string directory)
     {
         files = std.file.dirEntries(directory, "*.jpg", SpanMode.shallow).array;
-        if (files.length == 0)
-        {
-            throw new Exception("no jpg files found");
-        }
+        (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
 

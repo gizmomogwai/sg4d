@@ -111,10 +111,7 @@ class NodeData
 
     void setRenderThread(Tid tid)
     {
-        if (live)
-        {
-            throw new Exception("Node '%s' already attached to a tid".format(name));
-        }
+        (!live).enforce("Node '%s' already attached to a tid".format(name));
         this.renderThread = tid;
         this.live = true;
     }
@@ -164,10 +161,7 @@ class GroupData : NodeData
     void replaceChild(size_t idx, Node n)
     {
         ensureRenderThread;
-        if (idx >= childs.length)
-        {
-            throw new Exception("index out of bounds");
-        }
+        (idx < childs.length).enforce("index out of bounds '%s' >= '%s'".format(idx, childs.length));
         childs[idx].exchange(null);
         childs[idx] = n;
         if (live)

@@ -7,6 +7,7 @@ version (Default)
     import sg.window;
     import sg;
     import std.concurrency;
+    import std.exception;
     import std.stdio;
 
     import autoptr.common;
@@ -23,11 +24,9 @@ version (Default)
             this.textureName = textureName;
         }
         ~this() {
-            if (thisTid == renderThread) {
-                1.glDeleteTextures(&textureName);
-            } else {
-                throw new Exception("destructor should be called in render thread");
-            }
+            (thisTid == renderThread).enforce("destructor should be called in render thread");
+            1.glDeleteTextures(&textureName);
+            checkOglErrors;
         }
     }
     // opengl version till 2.1

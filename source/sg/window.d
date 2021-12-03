@@ -27,23 +27,11 @@ void loadBindBCOpenGL()
     writeln(result);
     version (Default)
     {
-        if (result == GLSupport.gl21)
-        {
-        }
-        else
-        {
-            throw new Exception("need opengl 2.1 support");
-        }
+        (result == GLSupport.gl21).enforce("need opengl 2.1 support");
     }
     version (GL_33)
     {
-        if (result == GLSupport.gl33)
-        {
-        }
-        else
-        {
-            throw new Exception("need opengl 3.3 support");
-        }
+        if (result == GLSupport.gl33).enforce("need opengl 3.3 support");
     }
 }
 
