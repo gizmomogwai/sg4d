@@ -121,7 +121,7 @@ void main(string[] args)
 
     scene.get.accept(new PrintVisitor);
 
-    scope renderVisitor = new TheRenderVisitor(window);
+    scope renderVisitor = new RenderVisitor(window);
     auto visitors = [renderVisitor, new BehaviorVisitor(),];
     while (!glfwWindowShouldClose(window.window))
     {

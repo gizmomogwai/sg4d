@@ -252,7 +252,7 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
     import sg.visitors;
 
     // dfmt off
-    Visitor renderVisitor = new TheRenderVisitor(window);
+    Visitor renderVisitor = new RenderVisitor(window);
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),

@@ -6,11 +6,11 @@ import std.concurrency;
 
 version (Default)
 {
-    public import sg.visitors.ogl2rendervisitor : TheRenderVisitor = OGL2RenderVisitor;
+    public import sg.visitors.ogl2rendervisitor : RenderVisitor = OGL2RenderVisitor;
 }
 version (GL_33)
 {
-    public import sg.visitors.ogl33rendervisitor : TheRenderVisitor = OGL33RenderVisitor;
+    public import sg.visitors.ogl33rendervisitor : RenderVisitor = OGL33RenderVisitor;
 }
 
 class BehaviorVisitor : Visitor
