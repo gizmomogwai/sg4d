@@ -31,7 +31,8 @@ void loadBindBCOpenGL()
     }
     version (GL_33)
     {
-        if (result == GLSupport.gl33).enforce("need opengl 3.3 support");
+        if (result == GLSupport.gl33)
+            .enforce("need opengl 3.3 support");
     }
 }
 

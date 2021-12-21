@@ -11,18 +11,26 @@ can do all the changes however one wants, if it is connected the
 changes need to be done in the renderThread.
 
 * TODOS
-** TODO remove jpgs from git repository
 ** IN-PROGRESS implement image viewer
-** TODO continue opengl33
-** TODO framerate e.g. between opengl33 and opengl2
+** TODO remove jpgs from git repository
 ** TODO show camera in scene from "outside"
 ** TODO add ui (e.g. nuklear or imgui)
-** TODO opengl33 textures
 ** TODO links to nice explanation
 ** TODO praise learnopengl tutorial
-** TODO ask about reference counting
 ** TODO make textures, normals and so on optional (or switch the vertex shader)
 
+** DONE framerate e.g. between opengl33 and opengl2
+   same same ...
+** DONE continue opengl33
+   CLOSED: [2021-12-03 Fri 20:59]
+   - CLOSING NOTE [2021-12-03 Fri 20:59]
+** DONE shaders hot editable
+   CLOSED: [2021-11-23 Tue 09:54]
+   - CLOSING NOTE [2021-11-23 Tue 09:54] \\
+     Most minimalistic version done
+** DONE opengl33 textures
+   CLOSED: [2021-11-22 Mon 22:36]
+   - CLOSING NOTE [2021-11-22 Mon 22:36]
 ** DONE add camera
   CLOSED: [2021-10-19 Tue 22:51]
   - CLOSING NOTE [2021-10-19 Tue 22:51]

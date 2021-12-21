@@ -8,6 +8,8 @@ module sg.sg;
 
 import autoptr.common;
 import autoptr.intrusive_ptr;
+import containers.dynamicarray;
+import core.stdc.stdio;
 import optional;
 import std.concurrency;
 import std.exception;
@@ -62,14 +64,15 @@ int glGetInt(GLenum what)
     return result;
 }
 
-
 alias CustomData = IntrusivePtr!CustomDataData;
-class CustomDataData {
+class CustomDataData
+{
     SharedControlType referenceCounter;
-    ~this() {
+    ~this() @nogc
+    {
+        //printf("~CustomDataData\n");
     }
 }
-
 
 alias Node = IntrusivePtr!NodeData;
 class NodeData
@@ -80,15 +83,18 @@ class NodeData
     bool live; // TODO implement
 
     private string name;
+    private immutable(char)* stringZName;
     CustomData customData;
 
-    this(string _name)
+    this(string name)
     {
-        name = _name;
+        this.name = name;
+        this.stringZName = name.toStringz;
     }
 
-    ~this()
+    ~this() @nogc
     {
+        printf("~NodeData %s\n", stringZName);
     }
 
     auto getName()
@@ -120,19 +126,16 @@ class NodeData
 alias Group = IntrusivePtr!GroupData;
 class GroupData : NodeData
 {
-    Node[] childs;
+    DynamicArray!Node childs;
 
     this(string name)
     {
         super(name);
     }
 
-    ~this()
+    ~this() @nogc
     {
-        foreach (ref child; childs)
-        {
-            child.exchange(null);
-        }
+        printf("~GroupData %s\n", stringZName);
     }
 
     auto getChild(size_t idx)
@@ -143,9 +146,10 @@ class GroupData : NodeData
 
     void addChild(T)(T child)
     {
-        Node n = child;
         ensureRenderThread;
-        childs ~= n;
+
+        Node n = child;
+        childs.insertBack(n);
         if (live)
         {
             n.get.setRenderThread(renderThread);
@@ -161,8 +165,8 @@ class GroupData : NodeData
     void replaceChild(size_t idx, Node n)
     {
         ensureRenderThread;
-        (idx < childs.length).enforce("index out of bounds '%s' >= '%s'".format(idx, childs.length));
-        childs[idx].exchange(null);
+        (idx < childs.length).enforce("index out of bounds '%s' >= '%s'".format(idx,
+                childs.length));
         childs[idx] = n;
         if (live)
         {
@@ -222,7 +226,6 @@ class ProjectionGroupData : GroupData
         return this;
     }
 }
-
 
 abstract class Projection
 {
@@ -332,7 +335,6 @@ class ObserverData : ProjectionGroupData
     }
 }
 
-
 alias TransformationGroup = IntrusivePtr!TransformationGroupData;
 class TransformationGroupData : GroupData
 {
@@ -362,7 +364,6 @@ class TransformationGroupData : GroupData
         return this;
     }
 }
-
 
 class Geometry : NodeData
 {
@@ -764,12 +765,9 @@ class AppearanceData : NodeData
         this.textures = textures;
     }
 
-    ~this()
+    ~this() @nogc
     {
-        foreach (ref texture; textures)
-        {
-            texture.exchange(null);
-        }
+        printf("~AppearanceData(%s)\n", stringZName);
     }
 
     void setTexture(size_t index, Texture t)
@@ -794,8 +792,9 @@ class TextureData : NodeData
         this.wrapT = wrapT;
     }
 
-    ~this()
+    ~this() @nogc
     {
+        printf("~TextureData(%s)\n", stringZName);
     }
 }
 
@@ -811,8 +810,9 @@ class ShapeGroupData : GroupData
         this.appearance = appearance;
     }
 
-    ~this()
+    ~this() @nogc
     {
+        printf("~ShapeGroupData(%s)\n", stringZName);
     }
 
     override void accept(Visitor v)

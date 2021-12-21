@@ -23,10 +23,10 @@ version (Default)
             this.renderThread = renderThread;
             this.textureName = textureName;
         }
-        ~this() {
-            (thisTid == renderThread).enforce("destructor should be called in render thread");
+
+        ~this() @nogc
+        {
             1.glDeleteTextures(&textureName);
-            checkOglErrors;
         }
     }
     // opengl version till 2.1
@@ -159,7 +159,8 @@ version (Default)
             checkOglErrors;
 
             auto textureName = dynCast!(TextureNameData)(texture.customData);
-            if (textureName == null) {
+            if (textureName == null)
+            {
                 textureName = createAndLoadTexture(texture);
             }
 

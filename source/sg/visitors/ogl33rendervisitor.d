@@ -15,6 +15,7 @@ version (GL_33)
     import std.string;
     import autoptr.common;
     import autoptr.intrusive_ptr;
+    import core.stdc.stdio;
 
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData
@@ -28,10 +29,9 @@ version (GL_33)
             checkOglErrors;
         }
 
-        ~this() {
-            (thisTid == renderThread).enforce("Destructor should be called in renderthread");
+        ~this() @nogc
+        {
             1.glDeleteTextures(&textureName);
-            checkOglErrors;
         }
     }
 
@@ -172,8 +172,10 @@ version (GL_33)
             this.fileWatch = FileWatch("../shaders", true);
             update();
         }
-        ~this() {
-            writeln("free program");
+
+        ~this() @nogc
+        {
+            printf("free program\n");
         }
 
         void checkForUpdates()
@@ -299,8 +301,10 @@ version (GL_33)
             colors = new VBO();
             textureCoordinates = new VBO();
         }
-        ~this() {
-            writeln("free triangle array buffers");
+
+        ~this() @nogc
+        {
+            printf("free triangle array buffers\n");
         }
 
         auto bind()
@@ -309,6 +313,7 @@ version (GL_33)
             return this;
         }
     }
+
     alias IndexedInterleavedTriangleArrayBuffers = IntrusivePtr!IndexedInterleavedTriangleArrayBuffersData;
     class IndexedInterleavedTriangleArrayBuffersData : CustomDataData
     {
@@ -321,9 +326,12 @@ version (GL_33)
             vertexData = new VBO();
             indexData = new EBO();
         }
-        ~this() {
-            writeln("free indexedinterleavedtrianglearraybuffers");
+
+        ~this() @nogc
+        {
+            printf("free indexedinterleavedtrianglearraybuffers\n");
         }
+
         auto bind()
         {
             vao.bind();
@@ -354,7 +362,14 @@ version (GL_33)
         {
             foreach (ref child; n.childs)
             {
-                child.get.accept(this);
+                if (child.get)
+                {
+                    child.get.accept(this);
+                }
+                else
+                {
+                    writeln("child null", n);
+                }
             }
         }
 
@@ -415,7 +430,8 @@ version (GL_33)
 
             auto program = rcProgram.get;
 
-            if (auto rcBuffers = dynCast!(IndexedInterleavedTriangleArrayBuffersData)(triangles.customData))
+            if (auto rcBuffers = dynCast!(
+                    IndexedInterleavedTriangleArrayBuffersData)(triangles.customData))
             {
                 rcBuffers.get.bind();
             }
@@ -548,7 +564,8 @@ version (GL_33)
         void activate(AppearanceData appearance)
         {
             auto program = dynCast!(FileProgramData)(appearance.customData);
-            if (program == null) {
+            if (program == null)
+            {
                 program = FileProgram.make(appearance.shaderBase);
                 appearance.customData = program;
             }

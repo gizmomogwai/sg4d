@@ -6,6 +6,84 @@ import std;
 import autoptr.common;
 import autoptr.intrusive_ptr;
 
+class Buffer(T)
+{
+    T[] data;
+    public size_t lastWriteIndex;
+    size_t writeIndex;
+    public size_t readIndex;
+    size_t fillCount;
+    this(int capacity)
+    {
+        data.length = capacity;
+        lastWriteIndex = 0;
+        writeIndex = 0;
+        readIndex = 0;
+        fillCount = 0;
+    }
+
+    size_t capacity()
+    {
+        return data.length;
+    }
+
+    auto push(T t)
+    {
+        data[writeIndex] = t;
+        if (full())
+        {
+            lastWriteIndex = writeIndex;
+            writeIndex = increment(writeIndex, data.length);
+            readIndex = increment(readIndex, data.length);
+        }
+        else
+        {
+            lastWriteIndex = writeIndex;
+            writeIndex = increment(writeIndex, data.length);
+            ++fillCount;
+        }
+        return this;
+    }
+
+    bool full()
+    {
+        return fillCount == data.length;
+    }
+
+    auto oldest()
+    {
+        return data[readIndex];
+    }
+
+    auto newest()
+    {
+        return data[lastWriteIndex];
+    }
+
+    private auto increment(size_t index, size_t capacity)
+    {
+        return (index + 1) % capacity;
+    }
+}
+
+class Stats
+{
+    auto buffer = new Buffer!(SysTime)(140);
+    public int count = 0;
+    void tick()
+    {
+        buffer.push(Clock.currTime());
+        count++;
+    }
+
+    override string toString()
+    {
+        auto delta = buffer.newest - buffer.oldest;
+        return "%s %s delta: %s count: %s one-frame: %s %s %s".format(buffer.oldest, buffer.newest, delta,
+                buffer.capacity, delta / buffer.capacity, buffer.readIndex, buffer.lastWriteIndex);
+    }
+}
+
 auto triangle(float rotationSpeed)
 {
     Texture[] textures;
@@ -111,8 +189,18 @@ void main(string[] args)
     {
         observer.get.setPosition(vec3(0, 0, 300));
         auto image1 = read_image("image1.jpg");
-        observer.get.addChild(cube("cube", Texture.make(image1), 0, 0, 0, 0.001, true));
-        observer.get.addChild(cube("cube", Texture.make(image1), -200, 0, 0, 0.0005, false));
+        for (int i = 0; i < 1; ++i)
+        {
+            observer.get.addChild(cube("cube %s-true".format(i),
+                    Texture.make(image1), 0, 0, 0, 0.001, true));
+            observer.get.addChild(cube("cube %s-false".format(i),
+                    Texture.make(image1), -200, 0, 0, 0.0005, false));
+        }
+        writeln("observer before gc usecount: ", observer.useCount);
+        import core.memory;
+
+        GC.collect();
+        writeln("observer after gc usecount: ", observer.useCount);
     }
     else if (cast(IdentityProjection) projection)
     {
@@ -123,19 +211,33 @@ void main(string[] args)
 
     scope renderVisitor = new RenderVisitor(window);
     auto visitors = [renderVisitor, new BehaviorVisitor(),];
+    auto stats = new Stats();
     while (!glfwWindowShouldClose(window.window))
     {
-        foreach (visitor; visitors)
+        try
         {
-            scene.get.accept(visitor);
+            stats.tick;
+            if (stats.count % 999 == 0)
+            {
+                stats.toString.writeln;
+            }
+            foreach (visitor; visitors)
+            {
+                scene.get.accept(visitor);
+            }
+
+            glfwSwapBuffers(window.window);
+
+            // poll glfw and scene graph "events"
+            glfwPollEvents();
+            receiveTimeout(msecs(-1), (shared void delegate() codeForOglThread) {
+                codeForOglThread();
+            });
         }
-
-        glfwSwapBuffers(window.window);
-
-        // poll glfw and scene graph "events"
-        glfwPollEvents();
-        receiveTimeout(msecs(-1), (shared void delegate() codeForOglThread) {
-            codeForOglThread();
-        });
+        catch (Exception e)
+        {
+            writeln(e);
+        }
     }
+    writeln("done");
 }
