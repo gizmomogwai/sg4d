@@ -2,12 +2,12 @@ def examples
   [
     {
       name: "hello-world-camera",
-      path: "examples/hello-world",
+      path: "examples/helloworld",
       arguments: ["camera"],
     },
     {
       name: "hello-world-parallel",
-      path: "examples/hello-world",
+      path: "examples/helloworld",
       arguments: ["parallel"],
     },
     {

@@ -151,6 +151,12 @@ Projection getProjection(string[] args)
     return new IdentityProjection();
 }
 
+auto loadImage() {
+    auto result = read_image("image1.jpg");
+    (!result.e).enforce("Cannot load image1.jpg");
+    return result;
+}
+
 void main(string[] args)
 {
     auto scene = Scene.make("scene");
@@ -181,14 +187,14 @@ void main(string[] args)
     if (cast(ParallelProjection) projection)
     {
         observer.get.setPosition(vec3(-window.getWidth() / 2, -window.getHeight() / 2, 300));
-        auto image1 = read_image("image1.jpg");
+        auto image1 = loadImage();
         observer.get.addChild(cube("cube", Texture.make(image1), 0, 0, 0, 0.001, true));
         observer.get.addChild(cube("cube", Texture.make(image1), -200, 0, 0, 0.0005, false));
     }
     else if (cast(CameraProjection) projection)
     {
         observer.get.setPosition(vec3(0, 0, 300));
-        auto image1 = read_image("image1.jpg");
+        auto image1 = loadImage();
         for (int i = 0; i < 1; ++i)
         {
             observer.get.addChild(cube("cube %s-true".format(i),
