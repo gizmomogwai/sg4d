@@ -143,20 +143,9 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             return min(max(v, minimum), maximum);
         }
 
-        void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
-        {
-            auto windowSize = vec2(w.getWidth, w.getHeight);
-            auto position = observer.get.getPosition.xy;
-            auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
-            auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
-            observer.get.setPosition(vec3(newPosition.x, newPosition.y,
-            observer.get.getPosition.z));
-        }
-
-        void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
-        {
+        void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w) {
+            auto position = vec3(newPosition.x, newPosition.y, 100);
             auto scaledImage = imageDimension * zoom;
-            auto position = observer.get.getPosition + vec3(dx, dy, 0);
 
             if (scaledImage.x <= w.getWidth)
             {
@@ -176,6 +165,23 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
                 position.y = clamp(position.y, 0, imageDimension.y - w.getHeight / zoom);
             }
             observer.get.setPosition(position);
+        }
+
+
+        void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
+        {
+            auto windowSize = vec2(w.getWidth, w.getHeight);
+            auto position = observer.get.getPosition.xy;
+            auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
+            auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
+
+            adjustAndSetPosition(newPosition, imageDimension, newZoom, w);
+        }
+
+        void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
+        {
+            auto position = observer.get.getPosition.xy + vec2(dx, dy);
+            adjustAndSetPosition(position, imageDimension, zoom, w);
         }
 
         if (key == 'A')

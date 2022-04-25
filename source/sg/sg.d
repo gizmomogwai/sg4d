@@ -47,8 +47,8 @@ private string glGetErrorString(GLenum error)
         return "GL_INVALID_VALUE";
     case GL_INVALID_OPERATION:
         return "GL_INVALID_OPERATION";
-    case GL_INVALID_FRAMEBUFFER_OPERATION:
-        return "GL_INVALID_FRAMEBUFFER_OPERATION";
+        //case GL_INVALID_FRAMEBUFFER_OPERATION:
+        //return "GL_INVALID_FRAMEBUFFER_OPERATION";
     case GL_OUT_OF_MEMORY:
         return "GL_OUT_OF_MEMORY";
     default:
@@ -67,7 +67,7 @@ int glGetInt(GLenum what)
 alias CustomData = IntrusivePtr!CustomDataData;
 class CustomDataData
 {
-    SharedControlType referenceCounter;
+    SharedControlBlock referenceCounter;
     ~this() @nogc
     {
         //printf("~CustomDataData\n");
@@ -77,7 +77,7 @@ class CustomDataData
 alias Node = IntrusivePtr!NodeData;
 class NodeData
 {
-    SharedControlType referenceCounter;
+    SharedControlBlock referenceCounter;
 
     Tid renderThread; // TODO rename
     bool live; // TODO implement
