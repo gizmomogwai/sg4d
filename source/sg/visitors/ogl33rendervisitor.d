@@ -430,14 +430,15 @@ version (GL_33)
 
             auto program = rcProgram.get;
 
-            if (auto rcBuffers = dynCast!(
-                    IndexedInterleavedTriangleArrayBuffersData)(triangles.customData))
+            auto rcBuffers = dynCast!(
+                IndexedInterleavedTriangleArrayBuffersData)(triangles.customData);
+            if (rcBuffers != null)
             {
                 rcBuffers.get.bind();
             }
             else
             {
-                auto rcBuffers = IndexedInterleavedTriangleArrayBuffers.make();
+                rcBuffers = IndexedInterleavedTriangleArrayBuffers.make();
                 auto buffers = rcBuffers.get.bind();
                 buffers.indexData.bind.data(triangles.indices);
 
@@ -479,13 +480,14 @@ version (GL_33)
         {
             auto rcProgram = dynCast!(FileProgramData)(app.customData);
             auto program = rcProgram.get;
-            if (auto rcBuffers = dynCast!(TriangleArrayBuffersData)(triangles.customData))
+            auto rcBuffers = dynCast!(TriangleArrayBuffersData)(triangles.customData);
+            if (rcBuffers != null)
             {
                 rcBuffers.get.bind();
             }
             else
             {
-                auto rcBuffers = TriangleArrayBuffers.make();
+                rcBuffers = TriangleArrayBuffers.make();
                 auto buffers = rcBuffers.get.bind();
 
                 buffers.positions.bind.data(triangles.coordinates);
