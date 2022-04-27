@@ -80,8 +80,11 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
+        import std.datetime.stopwatch : StopWatch, AutoStart;
+        auto sw = StopWatch(AutoStart.yes);
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
+        writeln("Image %s loaded in %sms".format(nextFile.name, sw.peek.total!("msecs")));
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
             try
             {
