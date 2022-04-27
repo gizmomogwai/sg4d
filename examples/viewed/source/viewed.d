@@ -6,7 +6,7 @@ import std;
 
 static struct Args
 {
-    @NamedArgument()
+    @NamedArgument("directory", "dir", "d")
     string directory = ".";
 }
 
@@ -21,7 +21,7 @@ class Files
     int currentIndex;
     this(string directory)
     {
-        files = std.file.dirEntries(directory, "*.jpg", SpanMode.shallow).array;
+        files = std.file.dirEntries(directory, "*.jpg", SpanMode.depth).array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
@@ -82,14 +82,15 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
     {
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
-        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension) {
+        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
             try
             {
                 currentImageDimension = vec2(i.w, i.h);
 
-                (cast(ParallelProjection)(o.getProjection())).zoom = min(
+                zoom = min(
                     windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
+                o.setProjection(zoom.getProjection);
                 Node newNode = createTile(nextFile.name, i);
                 if (o.childs.length > 0)
                 {
@@ -118,72 +119,80 @@ void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
     loadNextImage(ownerTid, windowSize, nextFile);
 }
 
-void doZoom(int input, int key, ref float zoom, float newZoom, Observer observer, int action)
-{
-    if ((input == key) && (action == GLFW_RELEASE))
-    {
-        zoom = newZoom;
-        observer.get.setProjection(getProjection(zoom));
-    }
-}
 
-mixin Main.parseCLIArgs!(Args, (Args args) {
+mixin CLI!Args.main!((args) {
     vec2 currentImageDimension;
     float zoom = 1.0;
     float zoomDelta = 0.01;
     auto files = new Files(args.directory);
     auto scene = Scene.make("scene");
-    auto projection = getProjection(zoom);
+    auto projection = zoom.getProjection;
     auto observer = Observer.make("observer", projection);
     observer.get.setPosition(vec3(0, 0, 100));
     scene.get.addChild(observer);
+    auto clamp(float v, float minimum, float maximum)
+    {
+        return min(max(v, minimum), maximum);
+    }
+    void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w)
+    {
+        auto position = vec3(newPosition.x, newPosition.y, 100);
+        auto scaledImage = imageDimension * zoom;
+
+        if (scaledImage.x <= w.getWidth)
+        {
+            position.x = (scaledImage.x - w.getWidth) / 2.0 / zoom;
+        }
+        else
+        {
+            position.x = clamp(position.x, 0, imageDimension.x - w.getWidth / zoom);
+        }
+
+        if (scaledImage.y <= w.getHeight)
+        {
+            position.y = (scaledImage.y - w.getHeight) / 2.0 / zoom;
+        }
+        else
+        {
+            position.y = clamp(position.y, 0, imageDimension.y - w.getHeight / zoom);
+        }
+        observer.get.setPosition(position);
+    }
+
+    void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
+    {
+        zoom = newZoom;
+        observer.get.setProjection(zoom.getProjection);
+
+        auto windowSize = vec2(w.getWidth, w.getHeight);
+        auto position = observer.get.getPosition.xy;
+        auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
+        auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
+
+        adjustAndSetPosition(newPosition, imageDimension, zoom, w);
+    }
+
+    void doZoom(Window w,
+                int input,
+                int key,
+                float newZoom,
+                Observer observer,
+                int action,
+                vec2 imageDimension)
+    {
+        if ((input == key) && (action == GLFW_RELEASE))
+        {
+            zoomImage(w, imageDimension, zoom, newZoom);
+        }
+    }
+
+    void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
+    {
+        auto position = observer.get.getPosition.xy + vec2(dx, dy);
+        adjustAndSetPosition(position, imageDimension, zoom, w);
+    }
+
     auto window = new Window(scene, 800, 600, (Window w, int key, int, int action, int) {
-        auto clamp(float v, float minimum, float maximum)
-        {
-            return min(max(v, minimum), maximum);
-        }
-
-        void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w) {
-            auto position = vec3(newPosition.x, newPosition.y, 100);
-            auto scaledImage = imageDimension * zoom;
-
-            if (scaledImage.x <= w.getWidth)
-            {
-                position.x = (scaledImage.x - w.getWidth) / 2.0 / zoom;
-            }
-            else
-            {
-                position.x = clamp(position.x, 0, imageDimension.x - w.getWidth / zoom);
-            }
-
-            if (scaledImage.y <= w.getHeight)
-            {
-                position.y = (scaledImage.y - w.getHeight) / 2.0 / zoom;
-            }
-            else
-            {
-                position.y = clamp(position.y, 0, imageDimension.y - w.getHeight / zoom);
-            }
-            observer.get.setPosition(position);
-        }
-
-
-        void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
-        {
-            auto windowSize = vec2(w.getWidth, w.getHeight);
-            auto position = observer.get.getPosition.xy;
-            auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
-            auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
-
-            adjustAndSetPosition(newPosition, imageDimension, newZoom, w);
-        }
-
-        void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
-        {
-            auto position = observer.get.getPosition.xy + vec2(dx, dy);
-            adjustAndSetPosition(position, imageDimension, zoom, w);
-        }
-
         if (key == 'A')
         {
             move(-10, 0, w, currentImageDimension, zoom);
@@ -206,18 +215,12 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         }
         if (key == GLFW_KEY_RIGHT_BRACKET)
         {
-            auto oldZoom = zoom;
-            zoom += zoomDelta;
-            observer.get.setProjection(getProjection(zoom));
-            zoomImage(w, currentImageDimension, oldZoom, zoom);
+            zoomImage(w, currentImageDimension, zoom, zoom + zoomDelta);
             return;
         }
         if (key == GLFW_KEY_SLASH)
         {
-            auto oldZoom = zoom;
-            zoom -= zoomDelta;
-            observer.get.setProjection(getProjection(zoom));
-            zoomImage(w, currentImageDimension, oldZoom, zoom);
+            zoomImage(w, currentImageDimension, zoom, zoom - zoomDelta);
             return;
         }
         if (key == 'R')
@@ -241,16 +244,18 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
             spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
-        doZoom(key, '1', zoom, 1.0 / 16, observer, action);
-        doZoom(key, '2', zoom, 1.0 / 8, observer, action);
-        doZoom(key, '3', zoom, 1.0 / 4, observer, action);
-        doZoom(key, '4', zoom, 1.0 / 3, observer, action);
-        doZoom(key, '5', zoom, 1.0, observer, action);
-        doZoom(key, '6', zoom, 1.0 * 2, observer, action);
-        doZoom(key, '7', zoom, 1.0 * 4, observer, action);
-        doZoom(key, '8', zoom, 1.0 * 8, observer, action);
-        doZoom(key, '9', zoom, 1.0 * 16, observer, action);
-        doZoom(key, '0', zoom, 1.0 * 32, observer, action);
+
+        doZoom(w, key, '1', 1.0 / 16, observer, action, currentImageDimension);
+        doZoom(w, key, '2', 1.0 / 8, observer, action, currentImageDimension);
+        doZoom(w, key, '3', 1.0 / 4, observer, action, currentImageDimension);
+        doZoom(w, key, '4', 1.0 / 3, observer, action, currentImageDimension);
+        doZoom(w, key, '5', 1.0, observer, action, currentImageDimension);
+        doZoom(w, key, '6', 1.0 * 2, observer, action, currentImageDimension);
+        doZoom(w, key, '7', 1.0 * 4, observer, action, currentImageDimension);
+        doZoom(w, key, '8', 1.0 * 8, observer, action, currentImageDimension);
+        doZoom(w, key, '9', 1.0 * 16, observer, action, currentImageDimension);
+        doZoom(w, key, '0', 1.0 * 32, observer, action, currentImageDimension);
+
     });
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
@@ -278,8 +283,9 @@ mixin Main.parseCLIArgs!(Args, (Args args) {
         glfwPollEvents();
         // dfmt off
         receiveTimeout(msecs(-1),
-                       (shared void delegate(ObserverData o, ref vec2 imageDimension) codeForOglThread) {
-                           codeForOglThread(observer.get, currentImageDimension);
+                       (shared void delegate(ObserverData o, ref vec2 imageDimension, ref float zoom) codeForOglThread) {
+                           codeForOglThread(observer.get, currentImageDimension, zoom);
+                           move(0, 0, window, currentImageDimension, zoom); // clamp image to window
                        },
                        (shared void delegate() codeForOglThread) {
                            codeForOglThread();
