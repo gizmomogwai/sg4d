@@ -70,7 +70,10 @@ class CustomDataData
     SharedControlBlock referenceCounter;
     ~this() @nogc
     {
-        //printf("~CustomDataData\n");
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~CustomDataData\n");
+        }
     }
 }
 
@@ -94,7 +97,10 @@ class NodeData
 
     ~this() @nogc
     {
-        printf("~NodeData %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~NodeData %s\n", stringZName);
+        }
     }
 
     auto getName()
@@ -135,7 +141,10 @@ class GroupData : NodeData
 
     ~this() @nogc
     {
-        printf("~GroupData %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~GroupData %s\n", stringZName);
+        }
     }
 
     auto getChild(size_t idx)
@@ -382,7 +391,10 @@ class GeometryData : NodeData
 
     ~this() @nogc
     {
-        printf("~GeometryData %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~GeometryData %s\n", stringZName);
+        }
     }
 }
 
@@ -405,7 +417,10 @@ class TriangleArrayData : GeometryData
     }
     ~this() @nogc
     {
-        printf("~TriangleArray %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~TriangleArray %s\n", stringZName);
+        }
     }
 }
 
@@ -448,7 +463,10 @@ class VertexData : NodeData
     }
     ~this() @nogc
     {
-        printf("~VertexData %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~VertexData %s\n", stringZName);
+        }
     }
 
     private void init(Components components, uint size)
@@ -525,7 +543,10 @@ class IndexedInterleavedTriangleArrayData : GeometryData
 
     ~this() @nogc
     {
-        printf("~IndexedInterleavedTriangleArray %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~IndexedInterleavedTriangleArray %s\n", stringZName);
+        }
     }
 }
 alias IndexedInterleavedCube = IntrusivePtr!IndexedInterleavedCubeData;
@@ -592,7 +613,10 @@ class IndexedInterleavedCubeData : IndexedInterleavedTriangleArrayData
     }
     ~this() @nogc
     {
-        printf("~IndexedInterleavedCube %s\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~IndexedInterleavedCube %s\n", stringZName);
+        }
     }
 }
 
@@ -806,7 +830,10 @@ class AppearanceData : NodeData
 
     ~this() @nogc
     {
-        printf("~AppearanceData(%s)\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~AppearanceData(%s)\n", stringZName);
+        }
     }
 }
 
@@ -827,7 +854,10 @@ class TextureData : NodeData
 
     ~this() @nogc
     {
-        printf("~TextureData(%s)\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~TextureData(%s)\n", stringZName);
+        }
     }
 }
 
@@ -845,7 +875,10 @@ class ShapeGroupData : GroupData
 
     ~this() @nogc
     {
-        printf("~ShapeGroupData(%s)\n", stringZName);
+        version (DEBUG_DESTRUCTORS)
+        {
+            printf("~ShapeGroupData(%s)\n", stringZName);
+        }
     }
 
     override void accept(Visitor v)

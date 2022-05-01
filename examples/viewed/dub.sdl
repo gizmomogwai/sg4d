@@ -10,9 +10,11 @@ configuration "opengl2" {
 	targetType "executable"
 	targetPath "../../out/opengl2"
 	versions "Default" "GL_ARB" "GL_AllowDeprecated"
+	versions "DEBUG_DESTRUCTORS"
 }
 configuration "opengl33" {
 	targetType "executable"
 	targetPath "../../out/opengl33"
 	versions "GL_33"
+	versions "DEBUG_DESTRUCTORS"
 }
