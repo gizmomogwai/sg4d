@@ -6,9 +6,9 @@
 // http://www.lighthouse3d.com/tutorials/glsl-tutorial/hello-world/
 module sg.sg;
 
-import autoptr.common;
-import autoptr.intrusive_ptr;
-import containers.dynamicarray;
+import btl.autoptr.common;
+import btl.autoptr.intrusive_ptr;
+import btl.vector;
 import core.stdc.stdio;
 import optional;
 import std.concurrency;
@@ -79,8 +79,8 @@ class NodeData
 {
     SharedControlBlock referenceCounter;
 
-    Tid renderThread; // TODO rename
-    bool live; // TODO implement
+    Tid renderThread;
+    bool live;
 
     private string name;
     private immutable(char)* stringZName;
@@ -126,7 +126,7 @@ class NodeData
 alias Group = IntrusivePtr!GroupData;
 class GroupData : NodeData
 {
-    DynamicArray!Node childs;
+    Vector!Node childs;
 
     this(string name)
     {
@@ -149,7 +149,7 @@ class GroupData : NodeData
         ensureRenderThread;
 
         Node n = child;
-        childs.insertBack(n);
+        childs.append(n);
         if (live)
         {
             n.get.setRenderThread(renderThread);
@@ -365,7 +365,8 @@ class TransformationGroupData : GroupData
     }
 }
 
-class Geometry : NodeData
+alias Geometry = IntrusivePtr!GeometryData;
+class GeometryData : NodeData
 {
     enum Type
     {
@@ -378,9 +379,15 @@ class Geometry : NodeData
     {
         super(name);
     }
+
+    ~this() @nogc
+    {
+        printf("~GeometryData %s\n", stringZName);
+    }
 }
 
-class TriangleArray : Geometry
+alias TriangleArray = IntrusivePtr!TriangleArrayData;
+class TriangleArrayData : GeometryData
 {
     Type type;
     vec3[] coordinates;
@@ -396,8 +403,13 @@ class TriangleArray : Geometry
         this.colors = colors;
         this.textureCoordinates = textureCoordinates;
     }
+    ~this() @nogc
+    {
+        printf("~TriangleArray %s\n", stringZName);
+    }
 }
 
+alias Vertices = IntrusivePtr!VertexData;
 class VertexData : NodeData
 {
     enum Component
@@ -420,6 +432,7 @@ class VertexData : NodeData
     this(string name, Components components, uint size)
     {
         super(name);
+
         init(components, size);
         data = new float[tupleSize * size];
     }
@@ -427,10 +440,15 @@ class VertexData : NodeData
     this(string name, Components components, uint size, float[] data)
     {
         super(name);
+
         init(components, size);
         enforce(data.length == (tupleSize * size),
                 "Expected %s float, but got %s floats".format(tupleSize * size, data.length));
         this.data = data;
+    }
+    ~this() @nogc
+    {
+        printf("~VertexData %s\n", stringZName);
     }
 
     private void init(Components components, uint size)
@@ -490,33 +508,40 @@ class VertexData : NodeData
     }
 }
 
-class IndexedInterleavedTriangleArray : Geometry
+alias IndexedInterleavedTriangleArray = IntrusivePtr!IndexedInterleavedTriangleArrayData;
+class IndexedInterleavedTriangleArrayData : GeometryData
 {
     Type type;
-    VertexData data;
+    Vertices data;
     uint[] indices;
-    this(string name, Type type, VertexData data, uint[] indices)
+
+    this(string name, Type type, Vertices data, uint[] indices)
     {
         super(name);
         this.type = type;
         this.data = data;
         this.indices = indices;
     }
-}
 
-class IndexedInterleavedCube : IndexedInterleavedTriangleArray
+    ~this() @nogc
+    {
+        printf("~IndexedInterleavedTriangleArray %s\n", stringZName);
+    }
+}
+alias IndexedInterleavedCube = IntrusivePtr!IndexedInterleavedCubeData;
+class IndexedInterleavedCubeData : IndexedInterleavedTriangleArrayData
 {
     this(string name, float size)
     {
         auto s = size;
         // dfmt off
         super(name, Type.ARRAY,
-              new VertexData(name,
-                             VertexData.Components(
-                                 VertexData.Component.VERTICES,
-                                 VertexData.Component.COLORS,
-                                 VertexData.Component.TEXTURE_COORDINATES,
-                             ), 8),
+              Vertices.make(name,
+                            VertexData.Components(
+                                VertexData.Component.VERTICES,
+                                VertexData.Component.COLORS,
+                                VertexData.Component.TEXTURE_COORDINATES,
+                            ), 8),
               [
                   // back
                   0, 2, 1, 0, 3, 2,
@@ -531,56 +556,69 @@ class IndexedInterleavedCube : IndexedInterleavedTriangleArray
                   // bottom
                   4, 0, 1, 4, 1, 5,
               ]);
+        auto d = data.get;
         // back
-        data.setVertex(0, -s, -s, -s);
-        data.setVertex(1,  s, -s, -s);
-        data.setVertex(2,  s,  s, -s);
-        data.setVertex(3, -s,  s, -s);
+        d.setVertex(0, -s, -s, -s);
+        d.setVertex(1,  s, -s, -s);
+        d.setVertex(2,  s,  s, -s);
+        d.setVertex(3, -s,  s, -s);
 
         // front
-        data.setVertex(4, -s, -s,  s);
-        data.setVertex(5,  s, -s,  s);
-        data.setVertex(6,  s,  s,  s);
-        data.setVertex(7, -s,  s,  s);
+        d.setVertex(4, -s, -s,  s);
+        d.setVertex(5,  s, -s,  s);
+        d.setVertex(6,  s,  s,  s);
+        d.setVertex(7, -s,  s,  s);
 
-        data.setColor(0, 0, 0, 0);
-        data.setColor(1, 1, 0, 0);
-        data.setColor(2, 1, 1, 0);
-        data.setColor(3, 0, 1, 0);
+        d.setColor(0, 0, 0, 0);
+        d.setColor(1, 1, 0, 0);
+        d.setColor(2, 1, 1, 0);
+        d.setColor(3, 0, 1, 0);
 
-        data.setColor(4, 0, 1, 1);
-        data.setColor(5, 0, 0, 1);
-        data.setColor(6, 1, 0, 1);
-        data.setColor(7, 1, 1, 1);
+        d.setColor(4, 0, 1, 1);
+        d.setColor(5, 0, 0, 1);
+        d.setColor(6, 1, 0, 1);
+        d.setColor(7, 1, 1, 1);
 
-        data.setTextureCoordinate(0, 0, 0);
-        data.setTextureCoordinate(1, 1, 0);
-        data.setTextureCoordinate(2, 1, 1);
-        data.setTextureCoordinate(3, 0, 1);
+        d.setTextureCoordinate(0, 0, 0);
+        d.setTextureCoordinate(1, 1, 0);
+        d.setTextureCoordinate(2, 1, 1);
+        d.setTextureCoordinate(3, 0, 1);
 
-        data.setTextureCoordinate(4, 0, 0);
-        data.setTextureCoordinate(5, 1, 0);
-        data.setTextureCoordinate(6, 1, 1);
-        data.setTextureCoordinate(7, 0, 1);
-
+        d.setTextureCoordinate(4, 0, 0);
+        d.setTextureCoordinate(5, 1, 0);
+        d.setTextureCoordinate(6, 1, 1);
+        d.setTextureCoordinate(7, 0, 1);
         // dfmt on
     }
-}
-
-class Triangle : TriangleArray
-{
-    this(string name)
+    ~this() @nogc
     {
-        super(name, Type.ARRAY, [
-                vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(0.0, 0.5, 0.0),
-                ], [
-                vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0),
-                vec4(0.0, 0.0, 1.0, 1.0),
-                ], [vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0),],);
+        printf("~IndexedInterleavedCube %s\n", stringZName);
     }
 }
 
-class TriangleArrayCube : TriangleArray
+alias Triangle = IntrusivePtr!TriangleArrayData;
+class TriangleData : TriangleArrayData
+{
+    // dfmt off
+    this(string name)
+    {
+        super(name, Type.ARRAY,
+              [
+                  vec3(-0.5, -0.5, 0.0), vec3(0.5, -0.5, 0.0), vec3(0.0, 0.5, 0.0),
+              ],
+              [
+                  vec4(1.0, 0.0, 0.0, 1.0), vec4(0.0, 1.0, 0.0, 1.0), vec4(0.0, 0.0, 1.0, 1.0),
+              ],
+              [
+                  vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0),
+              ],
+        );
+    }
+    // dfmt on
+}
+
+alias TriangleArrayCube = IntrusivePtr!TriangleArrayCubeData;
+class TriangleArrayCubeData : TriangleArrayData
 {
     this(string name, float size)
     {
@@ -756,11 +794,12 @@ class TriangleArrayCube : TriangleArray
 alias Appearance = IntrusivePtr!AppearanceData;
 class AppearanceData : NodeData
 {
-    Texture[] textures;
+    Vector!Texture textures;
     string shaderBase;
-    this(string shaderBase, Texture[] textures)
+
+    this(string name, string shaderBase, Vector!Texture textures)
     {
-        super(shaderBase);
+        super(name);
         this.shaderBase = shaderBase;
         this.textures = textures;
     }
@@ -769,12 +808,6 @@ class AppearanceData : NodeData
     {
         printf("~AppearanceData(%s)\n", stringZName);
     }
-
-    void setTexture(size_t index, Texture t)
-    {
-        this.textures[index] = t;
-    }
-
 }
 
 alias Texture = IntrusivePtr!TextureData;

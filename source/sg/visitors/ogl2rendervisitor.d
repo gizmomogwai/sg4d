@@ -10,8 +10,8 @@ version (Default)
     import std.exception;
     import std.stdio;
 
-    import autoptr.common;
-    import autoptr.intrusive_ptr;
+    import btl.autoptr.common;
+    import btl.autoptr.intrusive_ptr;
 
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData
@@ -180,41 +180,42 @@ version (Default)
         {
             activate(n.appearance.get);
 
-            if (auto g = cast(TriangleArray) n.geometry)
+            if (auto triangles = cast(TriangleArrayData) n.geometry.get)
             {
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
                 {
                     glEnableClientState(GL_VERTEX_ARRAY);
-                    glVertexPointer(3, GL_FLOAT, 0, g.coordinates.ptr);
+                    glVertexPointer(3, GL_FLOAT, 0, triangles.coordinates.ptr);
 
                     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                    glTexCoordPointer(2, GL_FLOAT, 0, g.textureCoordinates.ptr);
+                    glTexCoordPointer(2, GL_FLOAT, 0, triangles.textureCoordinates.ptr);
 
                     glEnableClientState(GL_COLOR_ARRAY);
-                    glColorPointer(4, GL_FLOAT, 0, g.colors.ptr);
+                    glColorPointer(4, GL_FLOAT, 0, triangles.colors.ptr);
 
-                    glDrawArrays(GL_TRIANGLES, 0, cast(int) g.coordinates.length);
+                    glDrawArrays(GL_TRIANGLES, 0, cast(int) triangles.coordinates.length);
                 }
                 glPopClientAttrib();
             }
 
-            if (auto triangles = cast(IndexedInterleavedTriangleArray) n.geometry)
+            if (auto triangles = cast(IndexedInterleavedTriangleArrayData) n.geometry.get)
             {
-                int stride = cast(int)(triangles.data.tupleSize * float.sizeof);
+                auto vertices = triangles.data.get;
+                int stride = cast(int)(vertices.tupleSize * float.sizeof);
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
                 {
                     glEnableClientState(GL_VERTEX_ARRAY);
-                    glVertexPointer(3, GL_FLOAT, stride, triangles.data.data.ptr);
+                    glVertexPointer(3, GL_FLOAT, stride, vertices.data.ptr);
 
                     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
                     glTexCoordPointer(2, GL_FLOAT, stride,
-                            triangles.data.data.ptr + triangles.data.textureCoordinatesOffset);
+                            vertices.data.ptr + vertices.textureCoordinatesOffset);
 
-                    if (triangles.data.components.COLORS)
+                    if (vertices.components.COLORS)
                     {
                         glEnableClientState(GL_COLOR_ARRAY);
                         glColorPointer(4, GL_FLOAT, stride,
-                                triangles.data.data.ptr + triangles.data.colorsOffset);
+                                vertices.data.ptr + vertices.colorsOffset);
                     }
 
                     glDrawElements(GL_TRIANGLES, cast(int) triangles.indices.length,

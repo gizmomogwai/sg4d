@@ -13,8 +13,8 @@ version (GL_33)
     import std.conv;
     import std.exception;
     import std.string;
-    import autoptr.common;
-    import autoptr.intrusive_ptr;
+    import btl.autoptr.common;
+    import btl.autoptr.intrusive_ptr;
     import core.stdc.stdio;
 
     alias TextureName = IntrusivePtr!TextureNameData;
@@ -423,7 +423,7 @@ version (GL_33)
             modelViewStack = old;
         }
 
-        void prepareBuffers(AppearanceData app, IndexedInterleavedTriangleArray triangles)
+        void prepareBuffers(AppearanceData app, IndexedInterleavedTriangleArrayData triangles)
         {
             auto rcProgram = dynCast!(FileProgramData)(app.customData);
             (rcProgram != null).enforce("no program");
@@ -442,31 +442,31 @@ version (GL_33)
                 auto buffers = rcBuffers.get.bind();
                 buffers.indexData.bind.data(triangles.indices);
 
-                buffers.vertexData.bind.data(triangles.data.data);
+                buffers.vertexData.bind.data(triangles.data.get.data);
                 auto position = program.getAttribute("position");
                 position.glVertexAttribPointer(3, GL_FLOAT, GL_FALSE,
-                        cast(int)(triangles.data.tupleSize * float.sizeof), cast(void*) 0);
+                        cast(int)(triangles.data.get.tupleSize * float.sizeof), cast(void*) 0);
                 checkOglErrors();
                 position.glEnableVertexAttribArray();
                 checkOglErrors();
 
-                if (triangles.data.components.COLORS)
+                if (triangles.data.get.components.COLORS)
                 {
                     auto color = program.getAttribute("color");
                     color.glVertexAttribPointer(4, GL_FLOAT, GL_FALSE,
-                            cast(int)(triangles.data.tupleSize * float.sizeof),
-                            cast(void*)(triangles.data.colorsOffset * float.sizeof));
+                            cast(int)(triangles.data.get.tupleSize * float.sizeof),
+                            cast(void*)(triangles.data.get.colorsOffset * float.sizeof));
                     checkOglErrors();
                     color.glEnableVertexAttribArray();
                     checkOglErrors();
                 }
 
-                if (triangles.data.components.TEXTURE_COORDINATES)
+                if (triangles.data.get.components.TEXTURE_COORDINATES)
                 {
                     auto textureCoordinate = program.getAttribute("textureCoordinate");
                     textureCoordinate.glVertexAttribPointer(2, GL_FLOAT, GL_FALSE,
-                            cast(int)(triangles.data.tupleSize * float.sizeof),
-                            cast(void*)(triangles.data.textureCoordinatesOffset * float.sizeof));
+                            cast(int)(triangles.data.get.tupleSize * float.sizeof),
+                            cast(void*)(triangles.data.get.textureCoordinatesOffset * float.sizeof));
                     checkOglErrors();
                     textureCoordinate.glEnableVertexAttribArray();
                     checkOglErrors();
@@ -476,7 +476,7 @@ version (GL_33)
             }
         }
 
-        void prepareBuffers(AppearanceData app, TriangleArray triangles)
+        void prepareBuffers(AppearanceData app, TriangleArrayData triangles)
         {
             auto rcProgram = dynCast!(FileProgramData)(app.customData);
             auto program = rcProgram.get;
@@ -586,14 +586,14 @@ version (GL_33)
             program.get.setUniform("modelView", mv);
             checkOglErrors;
 
-            if (auto triangles = cast(TriangleArray) n.geometry)
+            if (auto triangles = cast(TriangleArrayData) n.geometry.get)
             {
                 prepareBuffers(n.appearance.get, triangles);
                 GL_TRIANGLES.glDrawArrays(0, cast(int) triangles.coordinates.length);
                 checkOglErrors;
             }
 
-            if (auto triangles = cast(IndexedInterleavedTriangleArray) n.geometry)
+            if (auto triangles = cast(IndexedInterleavedTriangleArrayData) n.geometry.get)
             {
                 prepareBuffers(n.appearance.get, triangles);
                 GL_TRIANGLES.glDrawElements(cast(int) triangles.indices.length,

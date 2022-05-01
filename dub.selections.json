@@ -1,18 +1,14 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"automem": "0.6.7",
-		"autoptr": "0.6.1-rc6",
-		"bindbc-glfw": "1.0.0",
+		"bindbc-glfw": "1.0.1",
 		"bindbc-loader": "1.0.1",
 		"bindbc-opengl": "1.0.0",
 		"bolts": "1.3.1",
-		"emsi_containers": "0.9.0",
+		"btl": "1.0.0-rc.10",
 		"fswatch": "0.6.0",
 		"gl3n": "1.4.1+commit.3.ga010cea",
 		"imagefmt": "2.1.2",
-		"optional": "1.3.0",
-		"test_allocator": "0.3.3",
-		"unit-threaded": "2.0.3"
+		"optional": "1.3.0"
 	}
 }

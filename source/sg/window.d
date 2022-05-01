@@ -1,8 +1,8 @@
 module sg.window;
 import std;
 import sg;
-import autoptr.common;
-import autoptr.intrusive_ptr;
+import btl.autoptr.common;
+import btl.autoptr.intrusive_ptr;
 
 public import bindbc.glfw;
 import glfwloader = bindbc.loader.sharedlib;

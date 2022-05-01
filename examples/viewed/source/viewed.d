@@ -1,7 +1,9 @@
 import argparse;
+import btl.vector;
 import core.thread;
 import sg.window;
 import sg;
+import std.datetime.stopwatch;
 import std;
 
 static struct Args
@@ -28,7 +30,7 @@ class Files
 
     bool empty()
     {
-        return currentIndex < files.length;
+        return files.length == 0;
     }
 
     auto front()
@@ -44,34 +46,49 @@ class Files
             currentIndex = 0;
         }
     }
+
+    auto back()
+    {
+        return files[currentIndex];
+    }
+
+    void popBack() {
+        currentIndex--;
+        if (currentIndex < 0) {
+            currentIndex = (files.length-1).to!int;
+        }
+    }
 }
 
 ShapeGroup createTile(string filename, IFImage i)
 {
-    Texture[] textures = [Texture.make(i)];
     // dfmt off
-    auto app = Appearance.make("position_texture", textures);
+    Geometry geometry = IndexedInterleavedTriangleArray.make(
+        filename,
+        GeometryData.Type.ARRAY,
+        Vertices.make(
+            filename,
+            VertexData.Components(
+                VertexData.Component.VERTICES,
+                VertexData.Component.TEXTURE_COORDINATES),
+            4,
+            [
+                0,   0,   0,  0.0f, 1.0f,
+                i.w, 0,   0,  1.0f, 1.0f,
+                i.w, i.h, 0,  1.0f, 0.0f,
+                0,   i.h, 0,  0.0f, 0.0f,
+            ],
+        ),
+        [0u, 1u, 2u, 0u, 2u, 3u,],
+    );
     return ShapeGroup.make(
         filename,
-        new IndexedInterleavedTriangleArray(
+        geometry,
+        Appearance.make(
             filename,
-            Geometry.Type.ARRAY,
-            new VertexData(
-                filename,
-                VertexData.Components(
-                    VertexData.Component.VERTICES,
-                    VertexData.Component.TEXTURE_COORDINATES),
-                4,
-                [
-                    0,   0,   0,  0.0f, 1.0f,
-                    i.w, 0,   0,  1.0f, 1.0f,
-                    i.w, i.h, 0,  1.0f, 0.0f,
-                    0,   i.h, 0,  0.0f, 0.0f,
-                ],
-            ),
-            [0, 1, 2, 0, 2, 3,],
+            "position_texture",
+            Vector!(Texture).build(Texture.make(i))
         ),
-        app,
     );
     // dfmt on
 }
@@ -80,11 +97,11 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
-        import std.datetime.stopwatch : StopWatch, AutoStart;
         auto sw = StopWatch(AutoStart.yes);
         auto i = read_image(nextFile.name);
         (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
         writeln("Image %s loaded in %sms".format(nextFile.name, sw.peek.total!("msecs")));
+
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
             try
             {
@@ -121,7 +138,6 @@ void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
 {
     loadNextImage(ownerTid, windowSize, nextFile);
 }
-
 
 mixin CLI!Args.main!((args) {
     vec2 currentImageDimension;
@@ -236,9 +252,15 @@ mixin CLI!Args.main!((args) {
             observer.get.backward();
             return;
         }
-        if (key == 'P')
+        if ((key == 'P') && (action == GLFW_RELEASE))
         {
             scene.get.accept(new PrintVisitor());
+            return;
+        }
+        if ((key == 'B') && (action == GLFW_RELEASE))
+        {
+            files.popBack;
+            spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
         if ((key == 'N') && (action == GLFW_RELEASE))
@@ -254,10 +276,10 @@ mixin CLI!Args.main!((args) {
         doZoom(w, key, '4', 1.0 / 3, observer, action, currentImageDimension);
         doZoom(w, key, '5', 1.0, observer, action, currentImageDimension);
         doZoom(w, key, '6', 1.0 * 2, observer, action, currentImageDimension);
-        doZoom(w, key, '7', 1.0 * 4, observer, action, currentImageDimension);
-        doZoom(w, key, '8', 1.0 * 8, observer, action, currentImageDimension);
-        doZoom(w, key, '9', 1.0 * 16, observer, action, currentImageDimension);
-        doZoom(w, key, '0', 1.0 * 32, observer, action, currentImageDimension);
+        doZoom(w, key, '7', 1.0 * 3, observer, action, currentImageDimension);
+        doZoom(w, key, '8', 1.0 * 4, observer, action, currentImageDimension);
+        doZoom(w, key, '9', 1.0 * 5, observer, action, currentImageDimension);
+        doZoom(w, key, '0', 1.0 * 6, observer, action, currentImageDimension);
 
     });
 
