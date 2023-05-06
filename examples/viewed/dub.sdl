@@ -3,18 +3,17 @@ description "Simple sg4d based imageviewer."
 authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
-dependency "argparse" version="*"
+dependency "argparse" version=">=0.0.0"
 dependency "sg4d" path="../.."
+dependency "mir-ion" version="~>2.1.8"
 targetType "executable"
 configuration "opengl2" {
 	targetType "executable"
 	targetPath "../../out/opengl2"
-	versions "Default" "GL_ARB" "GL_AllowDeprecated"
-	versions "DEBUG_DESTRUCTORS"
+	versions "Default" "GL_ARB" "GL_AllowDeprecated" "DEBUG_DESTRUCTORS"
 }
 configuration "opengl33" {
 	targetType "executable"
 	targetPath "../../out/opengl33"
-	versions "GL_33"
-	versions "DEBUG_DESTRUCTORS"
+	versions "GL_33" "DEBUG_DESTRUCTORS"
 }

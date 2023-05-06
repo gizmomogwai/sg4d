@@ -1,15 +1,28 @@
-import argparse;
+import argparse : NamedArgument, CLI;
 import btl.vector;
-import core.thread;
 import sg.window;
 import sg;
+
+import std.algorithm : min, max, map, joiner;
+import std.array : array;
+import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
+import std.conv : to;
 import std.datetime.stopwatch;
-import std;
+import std.exception : enforce;
+import std.file : DirEntry, dirEntries, SpanMode, readText;
+import std.format : format;
+import std.stdio : writeln;
+import std.path : dirName;
+
+import mir.deser.json : deserializeJson;
 
 static struct Args
 {
     @NamedArgument("directory", "dir", "d")
     string directory = ".";
+
+    @NamedArgument("album", "a")
+    string album;
 }
 
 Projection getProjection(float zoom)
@@ -23,9 +36,13 @@ class Files
     int currentIndex;
     this(string directory)
     {
-        files = std.file.dirEntries(directory, "*.jpg", SpanMode.depth).array;
+        files = directory.dirEntries("*.jpg", SpanMode.depth).array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
+    }
+    this(string[] directories)
+    {
+        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth)).joiner.array;
     }
 
     bool empty()
@@ -139,11 +156,32 @@ void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
     loadNextImage(ownerTid, windowSize, nextFile);
 }
 
-mixin CLI!Args.main!((args) {
+mixin CLI!Args.main!(
+    (args)
+    {
+        viewed(args);
+    }
+);
+
+auto getFiles(Args args)
+{
+    if (args.album.length > 0)
+    {
+        string[] directories = deserializeJson!(string[])(readText(args.album)).map!(d => "%s/%s".format(args.album.dirName, d)).array;
+        return new Files(directories);
+    }
+    else
+    {
+        return new Files(args.directory);
+    }
+}
+
+void viewed(Args args)
+{
     vec2 currentImageDimension;
     float zoom = 1.0;
     float zoomDelta = 0.01;
-    auto files = new Files(args.directory);
+    auto files = getFiles(args);
     auto scene = Scene.make("scene");
     auto projection = zoom.getProjection;
     auto observer = Observer.make("observer", projection);
@@ -318,4 +356,4 @@ mixin CLI!Args.main!((args) {
         );
         // dfmt on
     }
-});
+}

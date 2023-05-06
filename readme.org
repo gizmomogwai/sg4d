@@ -1,4 +1,4 @@
-#+TODO: TODO IN-PROGRESS | DONE
+#+TODO: TODO IN-PROGRESS | DONE WONT-DO
 
 * Simple scene graph (ala Java3D) for dlang
 
@@ -12,8 +12,14 @@ changes need to be done in the renderThread.
 
 * TODOS
 ** IN-PROGRESS implement image viewer
+** WONT-DO implement vulkan renderer
+https://www.jeremyong.com/c++/vulkan/graphics/rendering/2018/03/26/how-to-learn-vulkan/
+** TODO implement WebGPU renderer
+https://eliemichel.github.io/LearnWebGPU/getting-started/hello-webgpu.html
 ** TODO remove jpgs from git repository
 ** TODO show camera in scene from "outside"
+https://webgl2fundamentals.org/webgl/lessons/webgl-visualizing-the-camera.html
+
 ** TODO add ui (e.g. nuklear or imgui)
 ** TODO links to nice explanation
 ** TODO praise learnopengl tutorial
