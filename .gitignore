@@ -1,4 +1,4 @@
 .dub
 /out
 *.lst
-
+/examples/viewed/images/
