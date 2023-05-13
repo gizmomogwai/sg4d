@@ -3,8 +3,9 @@ import sg.window;
 import sg;
 import std;
 
-import autoptr.common;
-import autoptr.intrusive_ptr;
+import btl.autoptr.common;
+import btl.autoptr.intrusive_ptr;
+import btl.vector;
 
 class Buffer(T)
 {
@@ -86,9 +87,9 @@ class Stats
 
 auto triangle(float rotationSpeed)
 {
-    Texture[] textures;
+    /*
     auto rotation = TransformationGroup.make("rotation", mat4.identity);
-    auto appearance = Appearance.make("position_color_texture", textures);
+    auto appearance = Appearance.make("filename", "position_color_texture", Vector!Texture.build(Texture.make()));
     auto shape = ShapeGroup.make("triangle", new Triangle("tri"), appearance);
     rotation.get.addChild(shape);
     float rot = 0.5;
@@ -99,20 +100,22 @@ auto triangle(float rotationSpeed)
             rot = cast(float)(rot + rotationSpeed);
         }));
     return rotation;
+    */
 }
 
 auto cube(string name, Texture texture, float x, float y, float z, float rotationSpeed, bool indexed)
 {
     auto translation = TransformationGroup.make("translation-" ~ name, mat4.translation(x, y, z));
     auto rotation = TransformationGroup.make("rotation-" ~ name, mat4.identity());
-    Texture[] textures = [texture];
     // dfmt off
+    auto textures = Vector!(Texture).build(texture);
+    Geometry g = IndexedInterleavedCube.make("cube(size=1)", 100);
     auto shape =
         ShapeGroup.make("cube-" ~ name,
-                  indexed ?
-                      new IndexedInterleavedCube("cube(size=1)", 100)
-                      : new TriangleArrayCube("cube", 100),
-                        Appearance.make("position_color_texture", textures)
+                        //indexed ?
+                        g,
+                        //: TriangleArrayCube.make("cube", 100),
+                        Appearance.make("blub", "position_texture", textures)
         );
     // dfmt on
     rotation.get.addChild(shape);
@@ -210,7 +213,7 @@ void main(string[] args)
     }
     else if (cast(IdentityProjection) projection)
     {
-        observer.get.addChild(triangle(0.001));
+        //observer.get.addChild(triangle(0.001));
     }
 
     scene.get.accept(new PrintVisitor);

@@ -5,15 +5,17 @@ import btl.autoptr.common;
 import btl.autoptr.intrusive_ptr;
 
 public import bindbc.glfw;
-import glfwloader = bindbc.loader.sharedlib;
-public import bindbc.opengl;
+import bindbc.loader.sharedlib;
+import bindbc.opengl;
+import sg.visitors.oglhelper;
 
 void loadBindBCGlfw()
 {
     const result = loadGLFW();
+    writeln(result);
     if (result != glfwSupport)
     {
-        foreach (info; glfwloader.errors)
+        foreach (info; bindbc.loader.sharedlib.errors)
         {
             writeln("error: ", info.message);
         }
@@ -31,8 +33,7 @@ void loadBindBCOpenGL()
     }
     version (GL_33)
     {
-        if (result == GLSupport.gl33)
-            .enforce("need opengl 3.3 support");
+        (result == GLSupport.gl33).enforce("need opengl 3.3 support");
     }
 }
 
@@ -103,6 +104,42 @@ class Window
     int getHeight()
     {
         return cast(int)(height);
+    }
+    struct MouseInfo
+    {
+        int x;
+        int y;
+        ubyte button;
+    }
+    MouseInfo getMouseInfo()
+    {
+        double mouseX;
+        double mouseY;
+        window.glfwGetCursorPos(&mouseX, &mouseY);
+
+        static double mouseXToWindowFactor = 0;
+        static double mouseYToWindowFactor = 0;
+        if (mouseXToWindowFactor == 0) // need to initialize
+        {
+            int virtualWindowWidth;
+            int virtualWindowHeight;
+            window.glfwGetWindowSize(&virtualWindowWidth, &virtualWindowHeight);
+            if (virtualWindowWidth != 0 && virtualWindowHeight != 0)
+            {
+                int frameBufferWidth;
+                int frameBufferHeight;
+                glfwGetFramebufferSize(window, &frameBufferWidth, &frameBufferHeight);
+                mouseXToWindowFactor = double(frameBufferWidth) / virtualWindowWidth;
+                mouseYToWindowFactor = double(frameBufferHeight) / virtualWindowHeight;
+            }
+        }
+        mouseX *= mouseXToWindowFactor;
+        mouseY *= mouseYToWindowFactor;
+
+        ubyte buttonState = 0;
+        buttonState |= window.glfwGetMouseButton(GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS ? 0x1 : 0x0;
+        buttonState |= window.glfwGetMouseButton(GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS ? 0x2 : 0x0;
+        return MouseInfo(cast(int) mouseX, getHeight - cast(int) mouseY, buttonState);
     }
 }
 

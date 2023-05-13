@@ -1,5 +1,5 @@
 import argparse : NamedArgument, CLI;
-import btl.vector;
+import btl.vector : Vector;
 import sg.window;
 import sg;
 
@@ -74,6 +74,10 @@ class Files
         if (currentIndex < 0) {
             currentIndex = (files.length-1).to!int;
         }
+    }
+    auto array()
+    {
+        return files;
     }
 }
 
@@ -167,7 +171,12 @@ auto getFiles(Args args)
 {
     if (args.album.length > 0)
     {
-        string[] directories = deserializeJson!(string[])(readText(args.album)).map!(d => "%s/%s".format(args.album.dirName, d)).array;
+        string[] directories = args
+            .album
+            .readText
+            .deserializeJson!(string[])
+            .map!(d => "%s/%s".format(args.album.dirName, d))
+            .array;
         return new Files(directories);
     }
     else
@@ -338,6 +347,37 @@ void viewed(Args args)
         foreach (visitor; visitors)
         {
             scene.get.accept(visitor);
+        }
+
+        version (GL_33)
+        {
+            import imgui;
+            import std.path : expandTilde;
+            static bool once = true;
+            if (once)
+            {
+                "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
+                once = false;
+            }
+            auto mouse = window.getMouseInfo();
+            writeln(mouse);
+            imguiBeginFrame(mouse.x, mouse.y, mouse.button, 0, 0);
+            static int scrollArea;
+            imguiBeginScrollArea("Files", 0, 0, window.width, window.height, &scrollArea);
+            foreach (file; files.array)
+            {
+                if (imguiButton(file.to!string))
+                {
+                    writeln(file);
+                }
+            }
+            imguiEndScrollArea();
+            imguiEndFrame();
+            import bindbc.opengl;
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_DEPTH_TEST);
+            imguiRender(window.width, window.height);
         }
 
         glfwSwapBuffers(window.window);

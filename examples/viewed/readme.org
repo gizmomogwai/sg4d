@@ -1,0 +1,1 @@
+Please put droidsans.ttf to ~/.config/viewed/font.ttf

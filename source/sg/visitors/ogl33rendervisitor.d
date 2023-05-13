@@ -5,10 +5,12 @@ module sg.visitors.ogl33rendervisitor;
 
 version (GL_33)
 {
+    import bindbc.opengl;
+    import sg.visitors.oglhelper;
     import std;
     import sg;
     import sg.visitors;
-    import sg.window;
+    import sg.window : Window;
     import std.concurrency;
     import std.conv;
     import std.exception;
@@ -342,8 +344,6 @@ version (GL_33)
     // example code https://github.com/extrawurst/unecht/tree/master/source/unecht/gl
     class OGL33RenderVisitor : Visitor
     {
-        import bindbc.opengl;
-
         Window window;
         Shader vertexShader;
         Shader fragmentShader;
