@@ -128,7 +128,7 @@ class Window
             {
                 int frameBufferWidth;
                 int frameBufferHeight;
-                glfwGetFramebufferSize(window, &frameBufferWidth, &frameBufferHeight);
+                window.glfwGetFramebufferSize(&frameBufferWidth, &frameBufferHeight);
                 mouseXToWindowFactor = double(frameBufferWidth) / virtualWindowWidth;
                 mouseYToWindowFactor = double(frameBufferHeight) / virtualWindowHeight;
             }
@@ -161,7 +161,7 @@ extern (C)
     {
         try
         {
-            auto w = cast(Window) glfwGetWindowUserPointer(window);
+            auto w = cast(Window) window.glfwGetWindowUserPointer();
             w.sizeCallback(width, height);
         }
         catch (Throwable t)
