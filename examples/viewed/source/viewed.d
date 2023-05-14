@@ -258,7 +258,7 @@ void viewed(Args args)
         adjustAndSetPosition(position, imageDimension, zoom, w);
     }
 
-    auto window = new Window(scene, 800, 600, (Window w, int key, int, int action, int) {
+    auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/, int action, int /+mods+/) {
         if (key == 'A')
         {
             move(-10, 0, w, currentImageDimension, zoom);
@@ -327,7 +327,6 @@ void viewed(Args args)
         doZoom(w, key, '8', 1.0 * 4, observer, action, currentImageDimension);
         doZoom(w, key, '9', 1.0 * 5, observer, action, currentImageDimension);
         doZoom(w, key, '0', 1.0 * 6, observer, action, currentImageDimension);
-
     });
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
@@ -360,13 +359,15 @@ void viewed(Args args)
                 once = false;
             }
             auto mouse = window.getMouseInfo();
-            writeln(mouse);
-            imguiBeginFrame(mouse.x, mouse.y, mouse.button, 0, 0);
+            auto scrollInfo = window.getScrollInfo;
+            imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
+            scrollInfo.reset;
             static int scrollArea;
             imguiBeginScrollArea("Files", 0, 0, window.width, window.height, &scrollArea);
             foreach (file; files.array)
             {
-                if (imguiButton(file.to!string))
+                auto active = file == files.front;
+                if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string)))
                 {
                     writeln(file);
                 }

@@ -46,11 +46,24 @@ class Window
     GLFWwindow* window;
     int width;
     int height;
+
+    struct ScrollInfo
+    {
+        double xOffset;
+        double yOffset;
+        void reset()
+        {
+            xOffset = 0;
+            yOffset = 0;
+        }
+    }
+    ScrollInfo scroll;
     alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
     KeyCallback keyCallback;
     this(Scene scene, int width, int height, KeyCallback keyCallback)
     {
         this.scene = scene;
+        scroll.reset;
         scene.get.setRenderThread(thisTid);
         this.keyCallback = keyCallback;
         loadBindBCGlfw();
@@ -67,13 +80,14 @@ class Window
         window.glfwSetKeyCallback(&staticKeyCallback);
         window.glfwSetFramebufferSizeCallback(&staticSizeCallback);
         window.glfwSetWindowSize(width, height);
+        window.glfwSetScrollCallback(&staticScrollCallback);
+
         int w, h;
         window.glfwGetFramebufferSize(&w, &h);
         staticSizeCallback(window, w, h);
 
         window.glfwMakeContextCurrent();
         loadBindBCOpenGL();
-        writeln("Use opengl");
         writeln("OGLVendor:        ", glGetString(GL_VENDOR).to!string);
         writeln("OGLRenderer:      ", glGetString(GL_RENDERER).to!string);
         writeln("OGLVersion:       ", glGetString(GL_VERSION).to!string);
@@ -93,9 +107,17 @@ class Window
     {
         this.width = width;
         this.height = height;
-        writeln("width=", this.width, " height=", this.height);
+        //writeln("width=", this.width, " height=", this.height);
     }
-
+    void scrollCallback(double xOffset, double yOffset)
+    {
+        this.scroll.xOffset = xOffset;
+        this.scroll.yOffset = yOffset;
+    }
+    ref getScrollInfo()
+    {
+        return scroll;
+    }
     int getWidth()
     {
         return cast(int)(width);
@@ -154,6 +176,7 @@ extern (C)
         }
         catch (Throwable t)
         {
+            assert(0);
         }
     }
 
@@ -166,6 +189,18 @@ extern (C)
         }
         catch (Throwable t)
         {
+            assert(0);
+        }
+    }
+    void staticScrollCallback(GLFWwindow* window, double xOffset, double yOffset) nothrow
+    {
+        try {
+            auto w = cast(Window) window.glfwGetWindowUserPointer;
+            w.scrollCallback(xOffset, yOffset);
+        }
+        catch (Throwable t)
+        {
+            assert(0);
         }
     }
 }
