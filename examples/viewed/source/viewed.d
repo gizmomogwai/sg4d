@@ -3,7 +3,7 @@ import btl.vector : Vector;
 import sg.window;
 import sg;
 
-import std.algorithm : min, max, map, joiner;
+import std.algorithm : min, max, map, joiner, countUntil;
 import std.array : array;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -13,6 +13,8 @@ import std.file : DirEntry, dirEntries, SpanMode, readText;
 import std.format : format;
 import std.stdio : writeln;
 import std.path : dirName;
+import gl3n.linalg;
+import imagefmt;
 
 import mir.deser.json : deserializeJson;
 
@@ -33,7 +35,7 @@ Projection getProjection(float zoom)
 class Files
 {
     DirEntry[] files;
-    int currentIndex;
+    size_t currentIndex;
     this(string directory)
     {
         files = directory.dirEntries("*.jpg", SpanMode.depth).array;
@@ -43,6 +45,11 @@ class Files
     this(string[] directories)
     {
         files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth)).joiner.array;
+    }
+
+    void select(DirEntry file)
+    {
+        currentIndex = files.countUntil(file);
     }
 
     bool empty()
@@ -120,7 +127,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
     {
         auto sw = StopWatch(AutoStart.yes);
         auto i = read_image(nextFile.name);
-        (!i.e).enforce("Cannot read '%s'".format(nextFile.name));
+        (!i.e).enforce("Cannot read '%s' because %s".format(nextFile.name, i.e));
         writeln("Image %s loaded in %sms".format(nextFile.name, sw.peek.total!("msecs")));
 
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
@@ -187,6 +194,7 @@ auto getFiles(Args args)
 
 void viewed(Args args)
 {
+    bool showFileList = false;
     vec2 currentImageDimension;
     float zoom = 1.0;
     float zoomDelta = 0.01;
@@ -289,14 +297,9 @@ void viewed(Args args)
             zoomImage(w, currentImageDimension, zoom, zoom - zoomDelta);
             return;
         }
-        if (key == 'R')
+        if ((key == 'F') && (action == GLFW_RELEASE))
         {
-            observer.get.forward();
-            return;
-        }
-        if (key == 'F')
-        {
-            observer.get.backward();
+            showFileList = !showFileList;
             return;
         }
         if ((key == 'P') && (action == GLFW_RELEASE))
@@ -331,13 +334,67 @@ void viewed(Args args)
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
 
-    import sg.visitors;
+    import sg.visitors : RenderVisitor, BehaviorVisitor;
+
+    version (Default)
+    {
+        /// noop if not gl_33
+        class ImguiVisitor : Visitor
+        {
+            alias visit = Visitor.visit;
+            override void visit(SceneData n)
+            {
+            }
+        }
+    }
+    version (GL_33)
+    {
+        class ImguiVisitor : Visitor
+        {
+            import imgui;
+            this()
+            {
+                import std.path : expandTilde;
+                "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
+            }
+            alias visit = Visitor.visit;
+            override void visit(SceneData n)
+            {
+                if (showFileList)
+                {
+                    auto mouse = window.getMouseInfo();
+                    auto scrollInfo = window.getScrollInfo;
+                    imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
+                    scrollInfo.reset;
+                    static int scrollArea;
+                    imguiBeginScrollArea("Files", 0, 0, window.width/3, window.height, &scrollArea);
+                    foreach (file; files.array)
+                    {
+                        auto active = file == files.front;
+                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string)))
+                        {
+                            files.select(file);
+                            loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+                        }
+                    }
+                    imguiEndScrollArea();
+                    imguiEndFrame();
+                    import bindbc.opengl;
+                    glEnable(GL_BLEND);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glDisable(GL_DEPTH_TEST);
+                imguiRender(window.width, window.height);
+                }
+            }
+        }
+    }
 
     // dfmt off
     Visitor renderVisitor = new RenderVisitor(window);
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),
+        new ImguiVisitor(),
     ];
     // dfmt on
 
@@ -348,38 +405,6 @@ void viewed(Args args)
             scene.get.accept(visitor);
         }
 
-        version (GL_33)
-        {
-            import imgui;
-            import std.path : expandTilde;
-            static bool once = true;
-            if (once)
-            {
-                "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
-                once = false;
-            }
-            auto mouse = window.getMouseInfo();
-            auto scrollInfo = window.getScrollInfo;
-            imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
-            scrollInfo.reset;
-            static int scrollArea;
-            imguiBeginScrollArea("Files", 0, 0, window.width, window.height, &scrollArea);
-            foreach (file; files.array)
-            {
-                auto active = file == files.front;
-                if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string)))
-                {
-                    writeln(file);
-                }
-            }
-            imguiEndScrollArea();
-            imguiEndFrame();
-            import bindbc.opengl;
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glDisable(GL_DEPTH_TEST);
-            imguiRender(window.width, window.height);
-        }
 
         glfwSwapBuffers(window.window);
 

@@ -18,6 +18,8 @@ version (GL_33)
     import btl.autoptr.common;
     import btl.autoptr.intrusive_ptr;
     import core.stdc.stdio;
+    import gl3n.linalg;
+
 
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData

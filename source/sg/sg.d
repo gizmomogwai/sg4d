@@ -19,8 +19,8 @@ import std.string;
 import std.typecons : BitFlags;
 import sg.window;
 
-public import gl3n.linalg;
-public import imagefmt;
+import gl3n.linalg;
+import imagefmt;
 
 
 alias CustomData = IntrusivePtr!CustomDataData;
