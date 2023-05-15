@@ -9,7 +9,7 @@ import mir.deser.json : deserializeJson;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import sg;
-import std.algorithm : min, max, map, joiner, countUntil;
+import std.algorithm : min, max, map, joiner, countUntil, sort;
 import std.array : array;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -41,13 +41,13 @@ class Files
     size_t currentIndex;
     this(string directory)
     {
-        files = directory.dirEntries("*.jpg", SpanMode.depth).array;
+        files = directory.dirEntries("*.jpg", SpanMode.depth).array.sort.array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
     this(string[] directories)
     {
-        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth)).joiner.array;
+        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth).array.sort).joiner.array;
     }
 
     void select(DirEntry file)
