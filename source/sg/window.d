@@ -1,13 +1,16 @@
 module sg.window;
-import std;
-import sg;
-import btl.autoptr.common;
-import btl.autoptr.intrusive_ptr;
 
-public import bindbc.glfw;
+import bindbc.glfw;
 import bindbc.loader.sharedlib;
 import bindbc.opengl;
+import btl.autoptr.common;
+import btl.autoptr.intrusive_ptr;
 import sg.visitors.oglhelper;
+import sg;
+import std.concurrency : thisTid;
+import std.conv : to;
+import std.exception : enforce;
+import std.stdio : writeln;
 
 void loadBindBCGlfw()
 {

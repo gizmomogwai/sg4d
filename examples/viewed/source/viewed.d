@@ -1,10 +1,15 @@
-import argparse : NamedArgument, CLI;
-import btl.vector : Vector;
-import sg.window;
-import sg;
+module viewed;
 
+import argparse : NamedArgument, CLI;
+import bindbc.glfw;
+import btl.vector : Vector;
+import gl3n.linalg;
+import imagefmt;
+import mir.deser.json : deserializeJson;
+import sg.visitors : RenderVisitor, BehaviorVisitor;
+import sg.window : Window;
+import sg;
 import std.algorithm : min, max, map, joiner, countUntil;
-import std.math.traits : isNaN;
 import std.array : array;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -12,12 +17,9 @@ import std.datetime.stopwatch;
 import std.exception : enforce;
 import std.file : DirEntry, dirEntries, SpanMode, readText;
 import std.format : format;
+import std.math.traits : isNaN;
+import std.path : dirName, expandTilde;
 import std.stdio : writeln;
-import std.path : dirName;
-import gl3n.linalg;
-import imagefmt;
-
-import mir.deser.json : deserializeJson;
 
 static struct Args
 {
@@ -283,24 +285,24 @@ void viewed(Args args)
     }
 
     auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/, int action, int /+mods+/) {
-        if (key == 'A')
-        {
-            move(-10, 0, w, currentImageDimension, zoom);
-            return;
-        }
-        if (key == 'D')
-        {
-            move(10, 0, w, currentImageDimension, zoom);
-            return;
-        }
         if (key == 'W')
         {
             move(0, 10, w, currentImageDimension, zoom);
             return;
         }
+        if (key == 'A')
+        {
+            move(-10, 0, w, currentImageDimension, zoom);
+            return;
+        }
         if (key == 'S')
         {
             move(0, -10, w, currentImageDimension, zoom);
+            return;
+        }
+        if (key == 'D')
+        {
+            move(10, 0, w, currentImageDimension, zoom);
             return;
         }
         if (key == GLFW_KEY_RIGHT_BRACKET)
@@ -355,8 +357,6 @@ void viewed(Args args)
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
 
-    import sg.visitors : RenderVisitor, BehaviorVisitor;
-
     version (Default)
     {
         /// noop if not gl_33
@@ -377,7 +377,6 @@ void viewed(Args args)
             int fileInfoScrollArea;
             this()
             {
-                import std.path : expandTilde;
                 "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
             }
             alias visit = Visitor.visit;
