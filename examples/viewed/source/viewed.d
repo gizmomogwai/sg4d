@@ -4,6 +4,7 @@ import sg.window;
 import sg;
 
 import std.algorithm : min, max, map, joiner, countUntil;
+import std.math.traits : isNaN;
 import std.array : array;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -121,13 +122,22 @@ ShapeGroup createTile(string filename, IFImage i)
     // dfmt on
 }
 
+class LoadException : Exception
+{
+    string errorMessage;
+    this(string message, string errorMessage)
+    {
+        super(message);
+        this.errorMessage = errorMessage;
+    }
+}
 void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
         auto sw = StopWatch(AutoStart.yes);
         auto i = read_image(nextFile.name);
-        (!i.e).enforce("Cannot read '%s' because %s".format(nextFile.name, i.e));
+        (!i.e).enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name, IF_ERROR[i.e]), IF_ERROR[i.e]));
         writeln("Image %s loaded in %sms".format(nextFile.name, sw.peek.total!("msecs")));
 
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
@@ -155,6 +165,10 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
             }
         });
 
+    }
+    catch (LoadException e)
+    {
+        tid.send(cast(shared)e);
     }
     catch (Exception e)
     {
@@ -195,7 +209,9 @@ auto getFiles(Args args)
 void viewed(Args args)
 {
     bool showFileList = false;
+    bool showFileInfo = false;
     vec2 currentImageDimension;
+    string currentError;
     float zoom = 1.0;
     float zoomDelta = 0.01;
     auto files = getFiles(args);
@@ -302,6 +318,11 @@ void viewed(Args args)
             showFileList = !showFileList;
             return;
         }
+        if ((key == 'I') && (action == GLFW_RELEASE))
+        {
+            showFileInfo = !showFileInfo;
+            return;
+        }
         if ((key == 'P') && (action == GLFW_RELEASE))
         {
             scene.get.accept(new PrintVisitor());
@@ -352,6 +373,8 @@ void viewed(Args args)
         class ImguiVisitor : Visitor
         {
             import imgui;
+            int fileListScrollArea;
+            int fileInfoScrollArea;
             this()
             {
                 import std.path : expandTilde;
@@ -360,30 +383,60 @@ void viewed(Args args)
             alias visit = Visitor.visit;
             override void visit(SceneData n)
             {
+                bool uiActive = showFileInfo || showFileList;
+                if (!uiActive)
+                {
+                    return;
+                }
+                enum BORDER = 10;
+                int xPos = 0;
+                auto mouse = window.getMouseInfo();
+                auto scrollInfo = window.getScrollInfo;
+                imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
+                scrollInfo.reset;
                 if (showFileList)
                 {
-                    auto mouse = window.getMouseInfo();
-                    auto scrollInfo = window.getScrollInfo;
-                    imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
-                    scrollInfo.reset;
-                    static int scrollArea;
-                    imguiBeginScrollArea("Files", 0, 0, window.width/3, window.height, &scrollArea);
+                    imguiBeginScrollArea("Files", xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileListScrollArea);
+                    xPos += window.width/3 + 2*BORDER;
                     foreach (file; files.array)
                     {
                         auto active = file == files.front;
-                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string)))
+                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string), active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             loadNextImage(thisTid, vec2(window.width, window.height), files.front);
                         }
                     }
                     imguiEndScrollArea();
-                    imguiEndFrame();
+                }
+                if (showFileInfo)
+                {
+                    imguiBeginScrollArea("Info", xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileInfoScrollArea);
+                    auto active = files.front;
+                    imguiLabel("Filename:");
+                    imguiValue(active);
+                    imguiLabel("Filesize:");
+                    imguiValue(active.size.to!string);
+                    if (!currentImageDimension.x.isNaN)
+                    {
+                        imguiLabel("Dimension:");
+                        imguiValue(currentImageDimension.to!string);
+                    }
+                    if (currentError.length)
+                    {
+                        imguiLabel("Error:");
+                        imguiValue(currentError);
+                    }
+                    imguiEndScrollArea();
+                }
+                imguiEndFrame();
+                if (showFileInfo || showFileList)
+                {
                     import bindbc.opengl;
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glDisable(GL_DEPTH_TEST);
-                imguiRender(window.width, window.height);
+                    imguiRender(window.width, window.height);
                 }
             }
         }
@@ -413,12 +466,18 @@ void viewed(Args args)
         // dfmt off
         receiveTimeout(msecs(-1),
                        (shared void delegate(ObserverData o, ref vec2 imageDimension, ref float zoom) codeForOglThread) {
+                           currentError = "";
                            codeForOglThread(observer.get, currentImageDimension, zoom);
                            move(0, 0, window, currentImageDimension, zoom); // clamp image to window
                        },
                        (shared void delegate() codeForOglThread) {
                            codeForOglThread();
                        },
+                       (shared(LoadException) loadException)
+                       {
+                           currentImageDimension = vec2(float.nan, float.nan);
+                           currentError = loadException.errorMessage;
+                       }
         );
         // dfmt on
     }

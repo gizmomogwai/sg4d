@@ -15,7 +15,7 @@ configuration "opengl2" {
 configuration "opengl33" {
 	targetType "executable"
 	targetPath "../../out/opengl33"
-	versions "GL_33" "DEBUG_DESTRUCTORS"
+	versions "GL_33" /*"DEBUG_DESTRUCTORS"*/
         //dependency "dimgui" version="~master"
         dependency "dimgui" path="../../../_d/external/dimgui"
 }
