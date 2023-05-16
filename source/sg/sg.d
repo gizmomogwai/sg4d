@@ -18,10 +18,9 @@ import std.stdio;
 import std.string;
 import std.typecons : BitFlags;
 import sg.window;
+import gamut : Image;
 
 import gl3n.linalg;
-import imagefmt;
-
 
 alias CustomData = IntrusivePtr!CustomDataData;
 class CustomDataData
@@ -799,11 +798,11 @@ class AppearanceData : NodeData
 alias Texture = IntrusivePtr!TextureData;
 class TextureData : NodeData
 {
-    IFImage image;
+    Image* image;
     bool wrapS;
     bool wrapT;
     CustomData customData = null;
-    this(IFImage image, bool wrapS = false, bool wrapT = false)
+    this(Image* image, bool wrapS = false, bool wrapT = false)
     {
         super("texture");
         this.image = image;

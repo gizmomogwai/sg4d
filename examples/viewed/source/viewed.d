@@ -2,9 +2,9 @@ module viewed;
 
 import argparse : NamedArgument, CLI;
 import bindbc.glfw;
+import bindbc.opengl;
 import btl.vector : Vector;
-import gl3n.linalg;
-import imagefmt;
+import gl3n.linalg : vec2, vec3;
 import mir.deser.json : deserializeJson;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
@@ -20,6 +20,8 @@ import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
 import std.stdio : writeln;
+import gamut : Image;
+import core.time : Duration;
 
 static struct Args
 {
@@ -91,7 +93,7 @@ class Files
     }
 }
 
-ShapeGroup createTile(string filename, IFImage i)
+ShapeGroup createTile(string filename, Image* i)
 {
     // dfmt off
     Geometry geometry = IndexedInterleavedTriangleArray.make(
@@ -104,10 +106,10 @@ ShapeGroup createTile(string filename, IFImage i)
                 VertexData.Component.TEXTURE_COORDINATES),
             4,
             [
-                0,   0,   0,  0.0f, 1.0f,
-                i.w, 0,   0,  1.0f, 1.0f,
-                i.w, i.h, 0,  1.0f, 0.0f,
-                0,   i.h, 0,  0.0f, 0.0f,
+                0,       0,        0, 0.0f, 1.0f,
+                i.width, 0,        0, 1.0f, 1.0f,
+                i.width, i.height, 0, 1.0f, 0.0f,
+                0,       i.height, 0, 0.0f, 0.0f,
             ],
         ),
         [0u, 1u, 2u, 0u, 2u, 3u,],
@@ -127,31 +129,52 @@ ShapeGroup createTile(string filename, IFImage i)
 class LoadException : Exception
 {
     string errorMessage;
-    this(string message, string errorMessage)
+    long duration;
+    this(string message, string errorMessage, long duration)
     {
         super(message);
         this.errorMessage = errorMessage;
+        this.duration = duration;
     }
 }
+
 void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
         auto sw = StopWatch(AutoStart.yes);
-        auto i = read_image(nextFile.name);
-        (!i.e).enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name, IF_ERROR[i.e]), IF_ERROR[i.e]));
-        writeln("Image %s loaded in %sms".format(nextFile.name, sw.peek.total!("msecs")));
 
-        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom) {
+        Image* image = new Image;
+        image.loadFromFile(nextFile.name);
+        auto loadDuration = sw.peek.total!("msecs");
+        writeln("Image %s load%sin %sms".format(nextFile.name, image.isValid ? "ed sucessfully " : "ing failed ", loadDuration));
+
+        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name, image.errorMessage), image.errorMessage.to!string, loadDuration));
+        /+
+        writeln("valid: ", image.isValid);
+        writeln("type: ", image.type);
+        writeln("pitch: ", image.pitchInBytes);
+        writeln("width: ", image.width);
+        writeln("1st row: ", image.scanptr(0));
+        writeln("2nd row: ", image.scanptr(1));
+        writeln("diff: ", image.scanptr(1) - image.scanptr(0));
+        +/
+        if (image.pitchInBytes != image.width*3)
+        {
+            throw new LoadException("Image with filler bytes at the end of a row", "Image with filler bytes at the end of a row", loadDuration);
+        }
+
+        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom, ref long currentLoadDuration) {
             try
             {
-                currentImageDimension = vec2(i.w, i.h);
+                currentLoadDuration = loadDuration;
+                currentImageDimension = vec2(image.width, image.height);
 
                 zoom = min(
                     windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
                 o.setProjection(zoom.getProjection);
-                Node newNode = createTile(nextFile.name, i);
+                Node newNode = createTile(nextFile.name, image);
                 if (o.childs.length > 0)
                 {
                     o.replaceChild(0, newNode);
@@ -213,6 +236,7 @@ void viewed(Args args)
     bool showFileList = false;
     bool showFileInfo = false;
     vec2 currentImageDimension;
+    long currentLoadDuration;
     string currentError;
     float zoom = 1.0;
     float zoomDelta = 0.01;
@@ -426,12 +450,13 @@ void viewed(Args args)
                         imguiLabel("Error:");
                         imguiValue(currentError);
                     }
+                    imguiLabel("Load duration:");
+                    imguiValue(currentLoadDuration.to!string);
                     imguiEndScrollArea();
                 }
                 imguiEndFrame();
                 if (showFileInfo || showFileList)
                 {
-                    import bindbc.opengl;
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glDisable(GL_DEPTH_TEST);
@@ -464,9 +489,9 @@ void viewed(Args args)
         glfwPollEvents();
         // dfmt off
         receiveTimeout(msecs(-1),
-                       (shared void delegate(ObserverData o, ref vec2 imageDimension, ref float zoom) codeForOglThread) {
+                       (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
-                           codeForOglThread(observer.get, currentImageDimension, zoom);
+                           codeForOglThread(observer.get, currentImageDimension, zoom, currentLoadDuration);
                            move(0, 0, window, currentImageDimension, zoom); // clamp image to window
                        },
                        (shared void delegate() codeForOglThread) {
@@ -474,6 +499,7 @@ void viewed(Args args)
                        },
                        (shared(LoadException) loadException)
                        {
+                           currentLoadDuration = loadException.duration;
                            currentImageDimension = vec2(float.nan, float.nan);
                            currentError = loadException.errorMessage;
                        }

@@ -11,9 +11,9 @@ version (Default)
     import std.concurrency;
     import std.exception;
     import std.stdio;
-
     import btl.autoptr.common;
     import btl.autoptr.intrusive_ptr;
+    import gl3n.linalg;
 
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData
@@ -131,12 +131,12 @@ version (Default)
             glTexImage2D(GL_TEXTURE_2D, // target
                     0, // level
                     GL_RGB, // internalFormat
-                    image.w, // width
-                    image.h, // height
+                    image.width, // width
+                    image.height, // height
                     0, // border
                     GL_RGB, // format
                     GL_UNSIGNED_BYTE, // type
-                    image.buf8.ptr // pixels
+                    image.scanptr(0) // pixels
                     );
             checkOglErrors;
             GL_TEXTURE_ENV.glTexEnvf(GL_TEXTURE_ENV_MODE, GL_MODULATE);

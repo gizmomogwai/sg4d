@@ -179,7 +179,10 @@ version (GL_33)
 
         ~this() @nogc
         {
-            printf("free program\n");
+            version (DEBUG_DESTRUCTORS)
+            {
+                printf("~FileProgramData\n");
+            }
         }
 
         void checkForUpdates()
@@ -308,7 +311,10 @@ version (GL_33)
 
         ~this() @nogc
         {
-            printf("free triangle array buffers\n");
+            version (DEBUG_DESTRUCTORS)
+            {
+                printf("~TriangleArrayBuffersData\n");
+            }
         }
 
         auto bind()
@@ -333,7 +339,10 @@ version (GL_33)
 
         ~this() @nogc
         {
-            printf("free indexedinterleavedtrianglearraybuffers\n");
+            version (DEBUG_DESTRUCTORS)
+            {
+                printf("~IndexedInterleavedTriangleArrayBuffersData\n");
+            }
         }
 
         auto bind()
@@ -531,12 +540,12 @@ version (GL_33)
             GL_TEXTURE_2D.glTexImage2D( // target
                     0, // level
                     GL_RGB, // internalFormat
-                    image.w, // width
-                    image.h, // height
+                    image.width, // width
+                    image.height, // height
                     0, // border
                     GL_RGB, // format
                     GL_UNSIGNED_BYTE, // type
-                    image.buf8.ptr // pixels
+                    image.scanptr(0) // pixels
                     );
             checkOglErrors;
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
