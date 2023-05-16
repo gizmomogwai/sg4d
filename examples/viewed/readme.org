@@ -4,6 +4,12 @@ Please put droidsans.ttf to ~/.config/viewed/font.ttf
 ** DONE show image load time in info dialog
 CLOSED: [2023-05-16 Tue 23:17]
 - CLOSING NOTE [2023-05-16 Tue 23:17]
-** TODO fullscreen mode
+** DONE fullscreen mode
+CLOSED: [2023-05-16 Tue 23:28]
+- CLOSING NOTE [2023-05-16 Tue 23:28] \\
+  works already
+** DONE space for next image
+CLOSED: [2023-05-16 Tue 23:29]
+- CLOSING NOTE [2023-05-16 Tue 23:29]
 ** TODO save state of slideshow of directory or album
 

@@ -360,7 +360,7 @@ void viewed(Args args)
             spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
-        if ((key == 'N') && (action == GLFW_RELEASE))
+        if (((key == 'N') || (key == ' ')) && (action == GLFW_RELEASE))
         {
             files.popFront;
             spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
