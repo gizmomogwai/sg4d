@@ -6,6 +6,7 @@ import bindbc.opengl;
 import btl.vector : Vector;
 import gl3n.linalg : vec2, vec3;
 import mir.deser.json : deserializeJson;
+import mir.ser.json : serializeJson;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import sg;
@@ -15,7 +16,7 @@ import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
 import std.datetime.stopwatch;
 import std.exception : enforce;
-import std.file : DirEntry, dirEntries, SpanMode, readText;
+import std.file : DirEntry, dirEntries, SpanMode, readText, write;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
@@ -90,6 +91,14 @@ class Files
     auto array()
     {
         return files;
+    }
+    auto jumpTo(string s)
+    {
+        auto h = files.countUntil!(v => v.to!string == s);
+        if (h != -1)
+        {
+            currentIndex = h;
+        }
     }
 }
 
@@ -213,6 +222,31 @@ mixin CLI!Args.main!(
     }
 );
 
+// maps from album://string to filename
+// or from directory://string to filename
+static class State
+{
+    string[string] indices;
+    auto key(Args args)
+    {
+        return args.album.length > 0 ? "album://"~args.album : "directory://"~args.directory;
+    }
+    auto updateAndStore(Files files, Args args)
+    {
+        indices[key(args)] = files.front;
+        write(stateFile, serializeJson(this));
+        return this;
+    }
+    void update(ref Files files, Args args)
+    {
+        auto k = key(args);
+        if (k in indices)
+        {
+            files.jumpTo(indices[k]);
+        }
+    }
+}
+
 auto getFiles(Args args)
 {
     if (args.album.length > 0)
@@ -231,6 +265,21 @@ auto getFiles(Args args)
     }
 }
 
+auto stateFile() {
+    return "~/.config/viewed/state.json".expandTilde;
+}
+auto readStatefile()
+{
+    try
+    {
+        return stateFile().readText().deserializeJson!(State);
+    }
+    catch (Exception e)
+    {
+        return new State();
+    }
+ 
+}
 void viewed(Args args)
 {
     bool showFileList = false;
@@ -240,7 +289,9 @@ void viewed(Args args)
     string currentError;
     float zoom = 1.0;
     float zoomDelta = 0.01;
+    State state = readStatefile();
     auto files = getFiles(args);
+    state.update(files, args);
     auto scene = Scene.make("scene");
     auto projection = zoom.getProjection;
     auto observer = Observer.make("observer", projection);
@@ -357,12 +408,14 @@ void viewed(Args args)
         if ((key == 'B') && (action == GLFW_RELEASE))
         {
             files.popBack;
+            state = state.updateAndStore(files, args);
             spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
         if (((key == 'N') || (key == ' ')) && (action == GLFW_RELEASE))
         {
             files.popFront;
+            state = state.updateAndStore(files, args);
             spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
             return;
         }
