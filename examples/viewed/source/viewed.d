@@ -84,7 +84,8 @@ class Files
 
     void popBack() {
         currentIndex--;
-        if (currentIndex < 0) {
+        if (currentIndex == size_t.max)
+        {
             currentIndex = (files.length-1).to!int;
         }
     }
@@ -234,7 +235,7 @@ static class State
     auto updateAndStore(Files files, Args args)
     {
         indices[key(args)] = files.front;
-        write(stateFile, serializeJson(this));
+        stateFile.write(serializeJson(this));
         return this;
     }
     void update(ref Files files, Args args)
@@ -282,6 +283,13 @@ auto readStatefile()
 }
 void viewed(Args args)
 {
+    auto sw = StopWatch(AutoStart.yes);
+    Image* image = new Image;
+    string benchmark = "images/1/monalisa-original.jpg";
+    image.loadFromFile(benchmark);
+    auto loadDuration = sw.peek.total!("msecs");
+    writeln("single threaded ", benchmark, ": ", loadDuration);
+    
     bool showFileList = false;
     bool showFileInfo = false;
     vec2 currentImageDimension;
@@ -409,14 +417,14 @@ void viewed(Args args)
         {
             files.popBack;
             state = state.updateAndStore(files, args);
-            spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
+            (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
             return;
         }
         if (((key == 'N') || (key == ' ')) && (action == GLFW_RELEASE))
         {
             files.popFront;
             state = state.updateAndStore(files, args);
-            spawn(&loadNextImageSpawnable, vec2(w.width, w.height), files.front);
+            (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
             return;
         }
 
@@ -480,7 +488,8 @@ void viewed(Args args)
                         if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string), active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
-                            loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+                            state = state.updateAndStore(files, args);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
                         }
                     }
                     imguiEndScrollArea();
@@ -541,7 +550,7 @@ void viewed(Args args)
         // poll glfw and scene graph "events"
         glfwPollEvents();
         // dfmt off
-        receiveTimeout(msecs(-1),
+        receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
                            codeForOglThread(observer.get, currentImageDimension, zoom, currentLoadDuration);
