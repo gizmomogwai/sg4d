@@ -10,8 +10,9 @@ import mir.ser.json : serializeJson;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import sg;
-import std.algorithm : min, max, map, joiner, countUntil, sort;
-import std.array : array;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
+import std.array : array, join;
+import std.range : chunks;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
 import std.datetime.stopwatch;
@@ -501,7 +502,18 @@ void viewed(Args args)
                     imguiLabel("Filename:");
                     imguiValue(active);
                     imguiLabel("Filesize:");
-                    imguiValue(active.size.to!string);
+                    string formatFileSize(ulong fileSize)
+                    {
+                        import std.format.spec : singleSpec;
+                        import std.format.write : formatValue;
+                        import std.array : appender;
+                        auto buffer = appender!string();
+                        static spec = "%,3d".singleSpec;
+                        spec.separatorChar = '.';
+                        buffer.formatValue(fileSize, spec);
+                        return buffer[];
+                    }
+                    imguiValue(formatFileSize(active.size));
                     if (!currentImageDimension.x.isNaN)
                     {
                         imguiLabel("Dimension:");
