@@ -11,8 +11,8 @@ import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import sg;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
-import std.array : array, join;
-import std.range : chunks;
+import std.array : array, join, replace;
+import std.range : chunks, take;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
 import std.datetime.stopwatch;
@@ -25,6 +25,7 @@ import std.stdio : writeln;
 import gamut : Image;
 import core.time : Duration;
 
+bool imageChangedByKey = false;
 static struct Args
 {
     @NamedArgument("directory", "dir", "d")
@@ -45,7 +46,7 @@ class Files
     size_t currentIndex;
     this(string directory)
     {
-        files = directory.dirEntries("*.jpg", SpanMode.depth).array.sort.array;
+        files = directory.dirEntries("{*.jpg,*.png}", SpanMode.depth).array.sort.array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
@@ -84,16 +85,21 @@ class Files
     }
 
     void popBack() {
-        currentIndex--;
-        if (currentIndex == size_t.max)
+        if (currentIndex > 0)
+        {
+            currentIndex--;
+        }
+        else
         {
             currentIndex = (files.length-1).to!int;
         }
     }
+
     auto array()
     {
         return files;
     }
+
     auto jumpTo(string s)
     {
         auto h = files.countUntil!(v => v.to!string == s);
@@ -270,6 +276,7 @@ auto getFiles(Args args)
 auto stateFile() {
     return "~/.config/viewed/state.json".expandTilde;
 }
+
 auto readStatefile()
 {
     try
@@ -284,13 +291,14 @@ auto readStatefile()
 }
 void viewed(Args args)
 {
+    /+
     auto sw = StopWatch(AutoStart.yes);
     Image* image = new Image;
     string benchmark = "images/1/monalisa-original.jpg";
     image.loadFromFile(benchmark);
     auto loadDuration = sw.peek.total!("msecs");
     writeln("single threaded ", benchmark, ": ", loadDuration);
-    
+    +/
     bool showFileList = false;
     bool showFileInfo = false;
     vec2 currentImageDimension;
@@ -419,6 +427,7 @@ void viewed(Args args)
             files.popBack;
             state = state.updateAndStore(files, args);
             (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
+            imageChangedByKey = true;
             return;
         }
         if (((key == 'N') || (key == ' ')) && (action == GLFW_RELEASE))
@@ -426,6 +435,7 @@ void viewed(Args args)
             files.popFront;
             state = state.updateAndStore(files, args);
             (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
+            imageChangedByKey = true;
             return;
         }
 
@@ -459,8 +469,8 @@ void viewed(Args args)
         class ImguiVisitor : Visitor
         {
             import imgui;
-            int fileListScrollArea;
-            int fileInfoScrollArea;
+            ScrollInfo fileListScrollArea;
+            ScrollInfo fileInfoScrollArea;
             this()
             {
                 "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
@@ -477,16 +487,23 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
-                imguiBeginFrame(mouse.x, mouse.y, mouse.button, cast(int)scrollInfo.yOffset, 0);
+                imguiBeginFrame(mouse.x, mouse.y, mouse.button, imgui.api.ScrollInfo(cast(int)scrollInfo.xOffset, cast(int)scrollInfo.yOffset), 0);
                 scrollInfo.reset;
                 if (showFileList)
                 {
-                    imguiBeginScrollArea("Files", xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileListScrollArea);
+                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length), xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileListScrollArea, true);
                     xPos += window.width/3 + 2*BORDER;
-                    foreach (file; files.array)
+                    foreach (file; files.take(files.array.length).array)
                     {
                         auto active = file == files.front;
-                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string), active ? Enabled.no : Enabled.yes))
+                        /+
+                        if (active && imageChangedByKey)
+                        {
+                            imguiRevealNextElement();
+                            imageChangedByKey =false;
+                        }
+                        +/
+                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string.replace(args.directory, "")), active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             state = state.updateAndStore(files, args);

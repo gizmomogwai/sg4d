@@ -3,7 +3,14 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
+** TODO reveal in filelist which image is showing
+dearimgui can do this by calling setScrollHereY
 * Done Ideas
+** DONE loading while rendering is slower than single threaded loading!
+CLOSED: [2023-05-18 Thu 21:55]
+- CLOSING NOTE [2023-05-18 Thu 21:55]
+  doesnt seem to be the case at least in release mode
+
 ** DONE save state of slideshow of directory or album
 CLOSED: [2023-05-17 Wed 23:29]
 - CLOSING NOTE [2023-05-17 Wed 23:29]
