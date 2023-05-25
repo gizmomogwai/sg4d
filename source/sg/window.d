@@ -60,6 +60,7 @@ class Window
             yOffset = 0;
         }
     }
+
     ScrollInfo scroll;
     alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
     KeyCallback keyCallback;
@@ -112,15 +113,18 @@ class Window
         this.height = height;
         //writeln("width=", this.width, " height=", this.height);
     }
+
     void scrollCallback(double xOffset, double yOffset)
     {
         this.scroll.xOffset = xOffset;
         this.scroll.yOffset = yOffset;
     }
+
     ref getScrollInfo()
     {
         return scroll;
     }
+
     int getWidth()
     {
         return cast(int)(width);
@@ -130,12 +134,14 @@ class Window
     {
         return cast(int)(height);
     }
+
     struct MouseInfo
     {
         int x;
         int y;
         ubyte button;
     }
+
     MouseInfo getMouseInfo()
     {
         double mouseX;
@@ -195,9 +201,11 @@ extern (C)
             assert(0);
         }
     }
+
     void staticScrollCallback(GLFWwindow* window, double xOffset, double yOffset) nothrow
     {
-        try {
+        try
+        {
             auto w = cast(Window) window.glfwGetWindowUserPointer;
             w.scrollCallback(xOffset, yOffset);
         }

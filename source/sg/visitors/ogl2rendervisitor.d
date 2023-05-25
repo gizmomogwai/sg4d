@@ -1,6 +1,5 @@
 module sg.visitors.ogl2rendervisitor;
 
-
 version (Default)
 {
     import bindbc.opengl;

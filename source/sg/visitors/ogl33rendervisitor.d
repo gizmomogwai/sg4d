@@ -20,7 +20,6 @@ version (GL_33)
     import core.stdc.stdio;
     import gl3n.linalg;
 
-
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData
     {
@@ -441,8 +440,8 @@ version (GL_33)
 
             auto program = rcProgram.get;
 
-            auto rcBuffers = dynCast!(
-                IndexedInterleavedTriangleArrayBuffersData)(triangles.customData);
+            auto rcBuffers = dynCast!(IndexedInterleavedTriangleArrayBuffersData)(
+                    triangles.customData);
             if (rcBuffers != null)
             {
                 rcBuffers.get.bind();

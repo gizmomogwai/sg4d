@@ -154,7 +154,8 @@ Projection getProjection(string[] args)
     return new IdentityProjection();
 }
 
-auto loadImage() {
+auto loadImage()
+{
     auto result = read_image("image1.jpg");
     (!result.e).enforce("Cannot load image1.jpg");
     return result;

@@ -373,6 +373,7 @@ class TriangleArrayData : GeometryData
         this.colors = colors;
         this.textureCoordinates = textureCoordinates;
     }
+
     ~this() @nogc
     {
         version (DEBUG_DESTRUCTORS)
@@ -419,6 +420,7 @@ class VertexData : NodeData
                 "Expected %s float, but got %s floats".format(tupleSize * size, data.length));
         this.data = data;
     }
+
     ~this() @nogc
     {
         version (DEBUG_DESTRUCTORS)
@@ -507,6 +509,7 @@ class IndexedInterleavedTriangleArrayData : GeometryData
         }
     }
 }
+
 alias IndexedInterleavedCube = IntrusivePtr!IndexedInterleavedCubeData;
 class IndexedInterleavedCubeData : IndexedInterleavedTriangleArrayData
 {
@@ -569,6 +572,7 @@ class IndexedInterleavedCubeData : IndexedInterleavedTriangleArrayData
         d.setTextureCoordinate(7, 0, 1);
         // dfmt on
     }
+
     ~this() @nogc
     {
         version (DEBUG_DESTRUCTORS)

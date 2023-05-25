@@ -50,9 +50,11 @@ class Files
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
+
     this(string[] directories)
     {
-        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth).array.sort).joiner.array;
+        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth)
+                .array.sort).joiner.array;
     }
 
     void select(DirEntry file)
@@ -84,14 +86,15 @@ class Files
         return files[currentIndex];
     }
 
-    void popBack() {
+    void popBack()
+    {
         if (currentIndex > 0)
         {
             currentIndex--;
         }
         else
         {
-            currentIndex = (files.length-1).to!int;
+            currentIndex = (files.length - 1).to!int;
         }
     }
 
@@ -164,9 +167,11 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
         Image* image = new Image;
         image.loadFromFile(nextFile.name);
         auto loadDuration = sw.peek.total!("msecs");
-        writeln("Image %s load%sin %sms".format(nextFile.name, image.isValid ? "ed sucessfully " : "ing failed ", loadDuration));
+        writeln("Image %s load%sin %sms".format(nextFile.name, image.isValid
+                ? "ed sucessfully " : "ing failed ", loadDuration));
 
-        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name, image.errorMessage), image.errorMessage.to!string, loadDuration));
+        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name,
+                image.errorMessage), image.errorMessage.to!string, loadDuration));
         /+
         writeln("valid: ", image.isValid);
         writeln("type: ", image.type);
@@ -176,19 +181,20 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
         writeln("2nd row: ", image.scanptr(1));
         writeln("diff: ", image.scanptr(1) - image.scanptr(0));
         +/
-        if (image.pitchInBytes != image.width*3)
+        if (image.pitchInBytes != image.width * 3)
         {
-            throw new LoadException("Image with filler bytes at the end of a row", "Image with filler bytes at the end of a row", loadDuration);
+            throw new LoadException("Image with filler bytes at the end of a row",
+                    "Image with filler bytes at the end of a row", loadDuration);
         }
 
-        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension, ref float zoom, ref long currentLoadDuration) {
+        tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension,
+                ref float zoom, ref long currentLoadDuration) {
             try
             {
                 currentLoadDuration = loadDuration;
                 currentImageDimension = vec2(image.width, image.height);
 
-                zoom = min(
-                    windowSize.x.to!float / currentImageDimension.x,
+                zoom = min(windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
                 o.setProjection(zoom.getProjection);
                 Node newNode = createTile(nextFile.name, image);
@@ -210,7 +216,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
     }
     catch (LoadException e)
     {
-        tid.send(cast(shared)e);
+        tid.send(cast(shared) e);
     }
     catch (Exception e)
     {
@@ -223,12 +229,7 @@ void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
     loadNextImage(ownerTid, windowSize, nextFile);
 }
 
-mixin CLI!Args.main!(
-    (args)
-    {
-        viewed(args);
-    }
-);
+mixin CLI!Args.main!((args) { viewed(args); });
 
 // maps from album://string to filename
 // or from directory://string to filename
@@ -237,14 +238,16 @@ static class State
     string[string] indices;
     auto key(Args args)
     {
-        return args.album.length > 0 ? "album://"~args.album : "directory://"~args.directory;
+        return args.album.length > 0 ? "album://" ~ args.album : "directory://" ~ args.directory;
     }
+
     auto updateAndStore(Files files, Args args)
     {
         indices[key(args)] = files.front;
         stateFile.write(serializeJson(this));
         return this;
     }
+
     void update(ref Files files, Args args)
     {
         auto k = key(args);
@@ -259,8 +262,7 @@ auto getFiles(Args args)
 {
     if (args.album.length > 0)
     {
-        string[] directories = args
-            .album
+        string[] directories = args.album
             .readText
             .deserializeJson!(string[])
             .map!(d => "%s/%s".format(args.album.dirName, d))
@@ -273,7 +275,8 @@ auto getFiles(Args args)
     }
 }
 
-auto stateFile() {
+auto stateFile()
+{
     return "~/.config/viewed/state.json".expandTilde;
 }
 
@@ -287,8 +290,9 @@ auto readStatefile()
     {
         return new State();
     }
- 
+
 }
+
 void viewed(Args args)
 {
     /+
@@ -318,6 +322,7 @@ void viewed(Args args)
     {
         return min(max(v, minimum), maximum);
     }
+
     void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w)
     {
         auto position = vec3(newPosition.x, newPosition.y, 100);
@@ -356,13 +361,8 @@ void viewed(Args args)
         adjustAndSetPosition(newPosition, imageDimension, zoom, w);
     }
 
-    void doZoom(Window w,
-                int input,
-                int key,
-                float newZoom,
-                Observer observer,
-                int action,
-                vec2 imageDimension)
+    void doZoom(Window w, int input, int key, float newZoom, Observer observer,
+            int action, vec2 imageDimension)
     {
         if ((input == key) && (action == GLFW_RELEASE))
         {
@@ -376,7 +376,7 @@ void viewed(Args args)
         adjustAndSetPosition(position, imageDimension, zoom, w);
     }
 
-    auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/, int action, int /+mods+/) {
+    auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/ , int action, int /+mods+/ ) {
         if (key == 'W')
         {
             move(0, 10, w, currentImageDimension, zoom);
@@ -469,12 +469,14 @@ void viewed(Args args)
         class ImguiVisitor : Visitor
         {
             import imgui;
+
             ScrollInfo fileListScrollArea;
             ScrollInfo fileInfoScrollArea;
             this()
             {
                 "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
             }
+
             alias visit = Visitor.visit;
             override void visit(SceneData n)
             {
@@ -487,12 +489,16 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
-                imguiBeginFrame(mouse.x, mouse.y, mouse.button, imgui.api.ScrollInfo(cast(int)scrollInfo.xOffset, cast(int)scrollInfo.yOffset), 0);
+                imguiBeginFrame(mouse.x, mouse.y, mouse.button,
+                        imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
+                            cast(int) scrollInfo.yOffset), 0);
                 scrollInfo.reset;
                 if (showFileList)
                 {
-                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length), xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileListScrollArea, true);
-                    xPos += window.width/3 + 2*BORDER;
+                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex,
+                            files.array.length), xPos + BORDER, BORDER, window.width / 3,
+                            window.height - 2 * BORDER, &fileListScrollArea, true, 2000);
+                    xPos += window.width / 3 + 2 * BORDER;
                     foreach (file; files.take(files.array.length).array)
                     {
                         auto active = file == files.front;
@@ -503,18 +509,22 @@ void viewed(Args args)
                             imageChangedByKey =false;
                         }
                         +/
-                        if (imguiButton("%s %s".format(active ? "-> ": "", file.to!string.replace(args.directory, "")), active ? Enabled.no : Enabled.yes))
+                        if (imguiButton("%s %s".format(active ? "-> " : "",
+                                                       file.to!string.replace(args.directory, "").replace(args.album.dirName, "")),
+                                active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width,
+                                    window.height), files.front);
                         }
                     }
                     imguiEndScrollArea();
                 }
                 if (showFileInfo)
                 {
-                    imguiBeginScrollArea("Info", xPos+BORDER, BORDER, window.width/3, window.height-2*BORDER, &fileInfoScrollArea);
+                    imguiBeginScrollArea("Info", xPos + BORDER, BORDER,
+                            window.width / 3, window.height - 2 * BORDER, &fileInfoScrollArea);
                     auto active = files.front;
                     imguiLabel("Filename:");
                     imguiValue(active);
@@ -524,12 +534,14 @@ void viewed(Args args)
                         import std.format.spec : singleSpec;
                         import std.format.write : formatValue;
                         import std.array : appender;
+
                         auto buffer = appender!string();
                         static spec = "%,3d".singleSpec;
                         spec.separatorChar = '.';
                         buffer.formatValue(fileSize, spec);
                         return buffer[];
                     }
+
                     imguiValue(formatFileSize(active.size));
                     if (!currentImageDimension.x.isNaN)
                     {
@@ -572,7 +584,6 @@ void viewed(Args args)
         {
             scene.get.accept(visitor);
         }
-
 
         glfwSwapBuffers(window.window);
 
