@@ -490,8 +490,8 @@ void viewed(Args args)
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
                 imguiBeginFrame(mouse.x, mouse.y, mouse.button,
-                        imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
-                            cast(int) scrollInfo.yOffset), 0);
+                                imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
+                                                     cast(int) scrollInfo.yOffset), 0);
                 scrollInfo.reset;
                 if (showFileList)
                 {

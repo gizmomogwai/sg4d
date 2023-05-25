@@ -116,8 +116,8 @@ class Window
 
     void scrollCallback(double xOffset, double yOffset)
     {
-        this.scroll.xOffset = xOffset;
-        this.scroll.yOffset = yOffset;
+        this.scroll.xOffset = -xOffset;
+        this.scroll.yOffset = -yOffset;
     }
 
     ref getScrollInfo()
