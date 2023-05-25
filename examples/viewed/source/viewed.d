@@ -485,7 +485,7 @@ void viewed(Args args)
                 {
                     return;
                 }
-                enum BORDER = 10;
+                enum BORDER = 20;
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
@@ -495,10 +495,11 @@ void viewed(Args args)
                 scrollInfo.reset;
                 if (showFileList)
                 {
-                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex,
-                            files.array.length), xPos + BORDER, BORDER, window.width / 3,
-                            window.height - 2 * BORDER, &fileListScrollArea, true, 2000);
-                    xPos += window.width / 3 + 2 * BORDER;
+                    xPos += BORDER;
+                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length),
+                                         xPos, BORDER,
+                                         window.width / 3, window.height - 2 * BORDER, &fileListScrollArea, true, 2000);
+                    xPos += window.width / 3;
                     foreach (file; files.take(files.array.length).array)
                     {
                         auto active = file == files.front;
@@ -523,8 +524,10 @@ void viewed(Args args)
                 }
                 if (showFileInfo)
                 {
-                    imguiBeginScrollArea("Info", xPos + BORDER, BORDER,
-                            window.width / 3, window.height - 2 * BORDER, &fileInfoScrollArea);
+                    xPos += BORDER;
+                    imguiBeginScrollArea("Info", xPos, BORDER,
+                                         window.width / 3, window.height - 2 * BORDER, &fileInfoScrollArea);
+                    xPos += window.width / 3;
                     auto active = files.front;
                     imguiLabel("Filename:");
                     imguiValue(active);
