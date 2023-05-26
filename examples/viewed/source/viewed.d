@@ -22,7 +22,7 @@ import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
 import std.stdio : writeln;
-import gamut : Image;
+import gamut;// : Image, LAYOUT_GAPLESS, LAYOUT_VERT_STRAIGHT;
 import core.time : Duration;
 
 bool imageChangedByKey = false;
@@ -181,10 +181,10 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
         writeln("2nd row: ", image.scanptr(1));
         writeln("diff: ", image.scanptr(1) - image.scanptr(0));
         +/
-        if (image.pitchInBytes != image.width * 3)
+        if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width*4))
         {
             throw new LoadException("Image with filler bytes at the end of a row",
-                    "Image with filler bytes at the end of a row", loadDuration);
+                  "Image with filler bytes at the end of a row", loadDuration);
         }
 
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension,
@@ -531,6 +531,7 @@ void viewed(Args args)
                     auto active = files.front;
                     imguiLabel("Filename:");
                     imguiValue(active);
+                    imguiSeparatorLine();
                     imguiLabel("Filesize:");
                     string formatFileSize(ulong fileSize)
                     {
@@ -546,18 +547,22 @@ void viewed(Args args)
                     }
 
                     imguiValue(formatFileSize(active.size));
+                    imguiSeparatorLine();
                     if (!currentImageDimension.x.isNaN)
                     {
                         imguiLabel("Dimension:");
                         imguiValue(currentImageDimension.to!string);
+                        imguiSeparatorLine();
                     }
                     if (currentError.length)
                     {
                         imguiLabel("Error:");
                         imguiValue(currentError);
+                        imguiSeparatorLine();
                     }
                     imguiLabel("Load duration:");
                     imguiValue(currentLoadDuration.to!string);
+                    imguiSeparatorLine();
                     imguiEndScrollArea();
                 }
                 imguiEndFrame();

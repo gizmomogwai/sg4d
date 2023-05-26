@@ -19,6 +19,7 @@ version (GL_33)
     import btl.autoptr.intrusive_ptr;
     import core.stdc.stdio;
     import gl3n.linalg;
+    import gamut.types : PixelType;
 
     alias TextureName = IntrusivePtr!TextureNameData;
     class TextureNameData : CustomDataData
@@ -536,7 +537,9 @@ version (GL_33)
             checkOglErrors;
             GL_UNPACK_ALIGNMENT.glPixelStorei(1);
             checkOglErrors;
-            GL_TEXTURE_2D.glTexImage2D( // target
+            if (image.type == PixelType.rgb8)
+            {
+                GL_TEXTURE_2D.glTexImage2D( // target
                     0, // level
                     GL_RGB, // internalFormat
                     image.width, // width
@@ -546,6 +549,24 @@ version (GL_33)
                     GL_UNSIGNED_BYTE, // type
                     image.scanptr(0) // pixels
                     );
+            }
+            else if (image.type == PixelType.rgba8)
+            {
+                GL_TEXTURE_2D.glTexImage2D( // target
+                    0, // level
+                    GL_RGBA, // internalFormat
+                    image.width, // width
+                    image.height, // height
+                    0, // border
+                    GL_RGBA, // format
+                    GL_UNSIGNED_BYTE, // type
+                    image.scanptr(0) // pixels
+                    );
+            }
+            else
+            {
+                writeln(image.type);
+            }
             checkOglErrors;
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             GL_TEXTURE_2D.glTexParameteri(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
