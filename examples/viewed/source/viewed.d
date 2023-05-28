@@ -470,8 +470,8 @@ void viewed(Args args)
         {
             import imgui;
 
-            ScrollInfo fileListScrollArea;
-            ScrollInfo fileInfoScrollArea;
+            ScrollAreaContext fileList;
+            ScrollAreaContext fileInfo;
             this()
             {
                 "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
@@ -496,20 +496,18 @@ void viewed(Args args)
                 if (showFileList)
                 {
                     xPos += BORDER;
-                    imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length),
+                    fileList.imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length),
                                          xPos, BORDER,
-                                         window.width / 3, window.height - 2 * BORDER, &fileListScrollArea, true, 2000);
+                                         window.width / 3, window.height - 2 * BORDER, true, 2000);
                     xPos += window.width / 3;
-                    foreach (file; files.take(files.array.length).array)
+                    foreach (file; files.array)
                     {
                         auto active = file == files.front;
-                        /+
                         if (active && imageChangedByKey)
                         {
-                            imguiRevealNextElement();
+                            fileList.imguiRevealNextElement();
                             imageChangedByKey =false;
                         }
-                        +/
                         if (imguiButton("%s %s".format(active ? "-> " : "",
                                                        file.to!string.replace(args.directory, "").replace(args.album.dirName, "")),
                                 active ? Enabled.no : Enabled.yes))
@@ -520,13 +518,13 @@ void viewed(Args args)
                                     window.height), files.front);
                         }
                     }
-                    imguiEndScrollArea();
+                    fileList.imguiEndScrollArea();
                 }
                 if (showFileInfo)
                 {
                     xPos += BORDER;
-                    imguiBeginScrollArea("Info", xPos, BORDER,
-                                         window.width / 3, window.height - 2 * BORDER, &fileInfoScrollArea);
+                    fileInfo.imguiBeginScrollArea("Info", xPos, BORDER,
+                                         window.width / 3, window.height - 2 * BORDER);
                     xPos += window.width / 3;
                     auto active = files.front;
                     imguiLabel("Filename:");
@@ -563,7 +561,7 @@ void viewed(Args args)
                     imguiLabel("Load duration:");
                     imguiValue(currentLoadDuration.to!string);
                     imguiSeparatorLine();
-                    imguiEndScrollArea();
+                    fileInfo.imguiEndScrollArea();
                 }
                 imguiEndFrame();
                 if (showFileInfo || showFileList)

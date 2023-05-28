@@ -2,3 +2,4 @@
 /out
 *.lst
 /examples/viewed/images/
+.DS_Store
