@@ -22,7 +22,7 @@ import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
 import std.stdio : writeln;
-import gamut;// : Image, LAYOUT_GAPLESS, LAYOUT_VERT_STRAIGHT;
+import gamut; // : Image, LAYOUT_GAPLESS, LAYOUT_VERT_STRAIGHT;
 import core.time : Duration;
 
 bool imageChangedByKey = false;
@@ -181,10 +181,10 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
         writeln("2nd row: ", image.scanptr(1));
         writeln("diff: ", image.scanptr(1) - image.scanptr(0));
         +/
-        if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width*4))
+        if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width * 4))
         {
             throw new LoadException("Image with filler bytes at the end of a row",
-                  "Image with filler bytes at the end of a row", loadDuration);
+                    "Image with filler bytes at the end of a row", loadDuration);
         }
 
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension,
@@ -470,11 +470,13 @@ void viewed(Args args)
         {
             import imgui;
 
+            ImGui gui;
             ScrollAreaContext fileList;
             ScrollAreaContext fileInfo;
             this()
             {
-                "~/.config/viewed/font.ttf".expandTilde.imguiInit.enforce;
+                gui = new ImGui();
+                gui.init("~/.config/viewed/font.ttf".expandTilde).enforce;
             }
 
             alias visit = Visitor.visit;
@@ -489,28 +491,29 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
-                imguiBeginFrame(mouse.x, mouse.y, mouse.button,
-                                imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
-                                                     cast(int) scrollInfo.yOffset), 0);
+                gui.beginFrame(mouse.x, mouse.y, mouse.button,
+                        imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
+                            cast(int) scrollInfo.yOffset), 0);
                 scrollInfo.reset;
                 if (showFileList)
                 {
                     xPos += BORDER;
-                    fileList.imguiBeginScrollArea("Files %d/%d".format(files.currentIndex, files.array.length),
-                                         xPos, BORDER,
-                                         window.width / 3, window.height - 2 * BORDER, true, 2000);
+                    gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex,
+                            files.array.length), xPos, BORDER, window.width / 3,
+                            window.height - 2 * BORDER, true, 2000);
                     xPos += window.width / 3;
                     foreach (file; files.array)
                     {
                         auto active = file == files.front;
                         if (active && imageChangedByKey)
                         {
-                            fileList.imguiRevealNextElement();
-                            imageChangedByKey =false;
+                            gui.revealNextElement(fileList);
+                            imageChangedByKey = false;
                         }
-                        if (imguiButton("%s %s".format(active ? "-> " : "",
-                                                       file.to!string.replace(args.directory, "").replace(args.album.dirName, "")),
-                                active ? Enabled.no : Enabled.yes))
+                        if (gui.button("%s %s".format(active ? "-> " : "",
+                                file.to!string.replace(args.directory, "")
+                                .replace(args.album.dirName, "")), active
+                                ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             state = state.updateAndStore(files, args);
@@ -518,19 +521,19 @@ void viewed(Args args)
                                     window.height), files.front);
                         }
                     }
-                    fileList.imguiEndScrollArea();
+                    gui.endScrollArea(fileList);
                 }
                 if (showFileInfo)
                 {
                     xPos += BORDER;
-                    fileInfo.imguiBeginScrollArea("Info", xPos, BORDER,
-                                         window.width / 3, window.height - 2 * BORDER);
+                    gui.beginScrollArea(fileInfo, "Info", xPos, BORDER,
+                            window.width / 3, window.height - 2 * BORDER);
                     xPos += window.width / 3;
                     auto active = files.front;
-                    imguiLabel("Filename:");
-                    imguiValue(active);
-                    imguiSeparatorLine();
-                    imguiLabel("Filesize:");
+                    gui.label("Filename:");
+                    gui.value(active);
+                    gui.separatorLine();
+                    gui.label("Filesize:");
                     string formatFileSize(ulong fileSize)
                     {
                         import std.format.spec : singleSpec;
@@ -544,32 +547,32 @@ void viewed(Args args)
                         return buffer[];
                     }
 
-                    imguiValue(formatFileSize(active.size));
-                    imguiSeparatorLine();
+                    gui.value(formatFileSize(active.size));
+                    gui.separatorLine();
                     if (!currentImageDimension.x.isNaN)
                     {
-                        imguiLabel("Dimension:");
-                        imguiValue(currentImageDimension.to!string);
-                        imguiSeparatorLine();
+                        gui.label("Dimension:");
+                        gui.value(currentImageDimension.to!string);
+                        gui.separatorLine();
                     }
                     if (currentError.length)
                     {
-                        imguiLabel("Error:");
-                        imguiValue(currentError);
-                        imguiSeparatorLine();
+                        gui.label("Error:");
+                        gui.value(currentError);
+                        gui.separatorLine();
                     }
-                    imguiLabel("Load duration:");
-                    imguiValue(currentLoadDuration.to!string);
-                    imguiSeparatorLine();
-                    fileInfo.imguiEndScrollArea();
+                    gui.label("Load duration:");
+                    gui.value(currentLoadDuration.to!string);
+                    gui.separatorLine();
+                    gui.endScrollArea(fileInfo);
                 }
-                imguiEndFrame();
+                gui.endFrame();
                 if (showFileInfo || showFileList)
                 {
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glDisable(GL_DEPTH_TEST);
-                    imguiRender(window.width, window.height);
+                    gui.render(window.width, window.height);
                 }
             }
         }
