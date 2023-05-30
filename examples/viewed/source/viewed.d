@@ -1,15 +1,14 @@
 module viewed;
 
 import argparse : NamedArgument, CLI;
-import bindbc.glfw;
-import bindbc.opengl;
+import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
 import gl3n.linalg : vec2, vec3;
 import mir.deser.json : deserializeJson;
 import mir.ser.json : serializeJson;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import sg;
+import sg : Texture, ParallelProjection, ShapeGroup, Geometry, IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance, ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
 import std.array : array, join, replace;
 import std.range : chunks, take;
@@ -26,6 +25,8 @@ import gamut : Image;
 import core.time : Duration;
 
 bool imageChangedByKey = false;
+bool firstImage = true;
+
 static struct Args
 {
     @NamedArgument("directory", "dir", "d")
@@ -35,7 +36,7 @@ static struct Args
     string album;
 }
 
-Projection getProjection(float zoom)
+auto getProjection(float zoom)
 {
     return new ParallelProjection(1, 1000, zoom);
 }
@@ -113,7 +114,7 @@ class Files
     }
 }
 
-ShapeGroup createTile(string filename, Image* i)
+auto createTile(string filename, Image* i)
 {
     // dfmt off
     Geometry geometry = IndexedInterleavedTriangleArray.make(
@@ -503,10 +504,11 @@ void viewed(Args args)
                     foreach (file; files.array)
                     {
                         const active = file == files.front;
-                        if (active && imageChangedByKey)
+                        if (active && (imageChangedByKey || firstImage))
                         {
                             gui.revealNextElement(fileList);
                             imageChangedByKey = false;
+                            firstImage = false;
                         }
                         const shortenedFilename = file
                             .to!string
@@ -569,6 +571,8 @@ void viewed(Args args)
                 gui.endFrame();
                 if (showFileInfo || showFileList)
                 {
+                    import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
+
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glDisable(GL_DEPTH_TEST);
@@ -587,14 +591,14 @@ void viewed(Args args)
     ];
     // dfmt on
 
-    while (!glfwWindowShouldClose(window.window))
+    while (!window.window.glfwWindowShouldClose())
     {
         foreach (visitor; visitors)
         {
             scene.get.accept(visitor);
         }
 
-        glfwSwapBuffers(window.window);
+        window.window.glfwSwapBuffers();
 
         // poll glfw and scene graph "events"
         glfwPollEvents();
