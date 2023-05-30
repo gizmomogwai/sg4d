@@ -3,8 +3,12 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
-** TODO reveal in filelist which image is showing
-dearimgui can do this by calling setScrollHereY
+** DONE reveal in filelist which image is showing
+CLOSED: [2023-05-31 Wed 00:46]
+- CLOSING NOTE [2023-05-31 Wed 00:46]
+at the moment the system gets crazy sometimes ..
+* TODO get rid of size limited draw commands in an idiomatic d way .. would be very simple with java arraylist
+
 * Done Ideas
 ** DONE loading while rendering is slower than single threaded loading!
 CLOSED: [2023-05-18 Thu 21:55]

@@ -120,9 +120,11 @@ class Window
         this.scroll.yOffset = -yOffset;
     }
 
-    ref getScrollInfo()
+    ScrollInfo getAndResetScrollInfo()
     {
-        return scroll;
+        ScrollInfo res = scroll;
+        scroll.reset;
+        return res;
     }
 
     int getWidth()

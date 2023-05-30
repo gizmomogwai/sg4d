@@ -491,9 +491,8 @@ void viewed(Args args)
                 enum BORDER = 20;
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
-                auto scrollInfo = window.getScrollInfo;
+                auto scrollInfo = window.getAndResetScrollInfo();
                 gui.beginFrame(MouseInfo(mouse.x, mouse.y, mouse.button, cast(int) scrollInfo.xOffset, cast(int)scrollInfo.yOffset), 0);
-                scrollInfo.reset;
                 if (showFileList)
                 {
                     xPos += BORDER;
@@ -504,23 +503,29 @@ void viewed(Args args)
                     foreach (file; files.array)
                     {
                         const active = file == files.front;
-                        if (active && (imageChangedByKey || firstImage))
+                        if ((imageChangedByKey || firstImage) && active)
                         {
                             gui.revealNextElement(fileList);
                             imageChangedByKey = false;
                             firstImage = false;
                         }
+                        // dfmt off
                         const shortenedFilename = file
                             .to!string
                             .replace(args.directory ! is null ? args.directory ~ "/" : "", "")
                             .replace(args.album !is null? args.album.dirName ~ "/" : "", "");
+                        // dfmt on
                         const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
                         if (gui.button(title, active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                    window.height), files.front);
+                            // dfmt off
+                            spawn(
+                                &loadNextImageSpawnable,
+                                vec2(window.width, window.height),
+                                files.front);
+                            // dfmt on
                         }
                     }
                     gui.endScrollArea(fileList);
@@ -529,7 +534,7 @@ void viewed(Args args)
                 {
                     xPos += BORDER;
                     gui.beginScrollArea(fileInfo, "Info", xPos, BORDER,
-                            window.width / 3, window.height - 2 * BORDER);
+                                        window.width / 3, window.height - 2 * BORDER);
                     xPos += window.width / 3;
                     auto active = files.front;
                     gui.label("Filename:");
