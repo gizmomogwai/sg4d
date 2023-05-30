@@ -22,14 +22,14 @@ import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
 import std.stdio : writeln;
-import gamut; // : Image, LAYOUT_GAPLESS, LAYOUT_VERT_STRAIGHT;
+import gamut : Image;
 import core.time : Duration;
 
 bool imageChangedByKey = false;
 static struct Args
 {
     @NamedArgument("directory", "dir", "d")
-    string directory = ".";
+    string directory;
 
     @NamedArgument("album", "a")
     string album;
@@ -468,7 +468,7 @@ void viewed(Args args)
     {
         class ImguiVisitor : Visitor
         {
-            import imgui;
+            import imgui : ImGui, ScrollAreaContext, MouseInfo, Enabled;
 
             ImGui gui;
             ScrollAreaContext fileList;
@@ -491,29 +491,29 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getScrollInfo;
-                gui.beginFrame(mouse.x, mouse.y, mouse.button,
-                        imgui.api.ScrollInfo(cast(int) scrollInfo.xOffset,
-                            cast(int) scrollInfo.yOffset), 0);
+                gui.beginFrame(MouseInfo(mouse.x, mouse.y, mouse.button, cast(int) scrollInfo.xOffset, cast(int)scrollInfo.yOffset), 0);
                 scrollInfo.reset;
                 if (showFileList)
                 {
                     xPos += BORDER;
-                    gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex,
-                            files.array.length), xPos, BORDER, window.width / 3,
-                            window.height - 2 * BORDER, true, 2000);
+                    gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex+1,
+                                                                       files.array.length), xPos, BORDER, window.width / 3,
+                                        window.height - 2 * BORDER, true, 2000);
                     xPos += window.width / 3;
                     foreach (file; files.array)
                     {
-                        auto active = file == files.front;
+                        const active = file == files.front;
                         if (active && imageChangedByKey)
                         {
                             gui.revealNextElement(fileList);
                             imageChangedByKey = false;
                         }
-                        if (gui.button("%s %s".format(active ? "-> " : "",
-                                file.to!string.replace(args.directory, "")
-                                .replace(args.album.dirName, "")), active
-                                ? Enabled.no : Enabled.yes))
+                        const shortenedFilename = file
+                            .to!string
+                            .replace(args.directory ! is null ? args.directory ~ "/" : "", "")
+                            .replace(args.album !is null? args.album.dirName ~ "/" : "", "");
+                        const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                        if (gui.button(title, active ? Enabled.no : Enabled.yes))
                         {
                             files.select(file);
                             state = state.updateAndStore(files, args);
@@ -534,7 +534,7 @@ void viewed(Args args)
                     gui.value(active);
                     gui.separatorLine();
                     gui.label("Filesize:");
-                    string formatFileSize(ulong fileSize)
+                    string formatFileSize(const ulong fileSize)
                     {
                         import std.format.spec : singleSpec;
                         import std.format.write : formatValue;
