@@ -3,15 +3,15 @@ module viewed;
 import argparse : NamedArgument, CLI;
 import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
+import gamut : Image;
 import gl3n.linalg : vec2, vec3;
 import mir.deser.json : deserializeJson;
 import mir.ser.json : serializeJson;
+import sg : Texture, ParallelProjection, ShapeGroup, Geometry, IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance, ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import sg : Texture, ParallelProjection, ShapeGroup, Geometry, IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance, ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
 import std.array : array, join, replace;
-import std.range : chunks, take;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
 import std.datetime.stopwatch;
@@ -20,8 +20,9 @@ import std.file : DirEntry, dirEntries, SpanMode, readText, write;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
+import std.range : chunks, take;
+import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
-import gamut : Image;
 import core.time : Duration;
 
 bool imageChangedByKey = false;
@@ -512,8 +513,9 @@ void viewed(Args args)
                         // dfmt off
                         const shortenedFilename = file
                             .to!string
-                            .replace(args.directory ! is null ? args.directory ~ "/" : "", "")
-                            .replace(args.album !is null? args.album.dirName ~ "/" : "", "");
+                            .replace(args.directory !is null ? args.directory : "", "")
+                            .replace(args.album !is null? args.album.dirName : "", "")
+                            .replaceFirst(regex("^/"), "");
                         // dfmt on
                         const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
                         if (gui.button(title, active ? Enabled.no : Enabled.yes))
