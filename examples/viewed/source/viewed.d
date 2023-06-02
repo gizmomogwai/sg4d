@@ -497,10 +497,11 @@ void viewed(Args args)
                 if (showFileList)
                 {
                     xPos += BORDER;
+                    int width = window.width / 3;
                     gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex+1,
-                                                                       files.array.length), xPos, BORDER, window.width / 3,
+                                                                       files.array.length), xPos, BORDER, width,
                                         window.height - 2 * BORDER, true, 2000);
-                    xPos += window.width / 3;
+                    xPos += width;
                     foreach (file; files.array)
                     {
                         const active = file == files.front;
@@ -535,9 +536,10 @@ void viewed(Args args)
                 if (showFileInfo)
                 {
                     xPos += BORDER;
+                    int width = max(0, window.width - BORDER - xPos);
                     gui.beginScrollArea(fileInfo, "Info", xPos, BORDER,
-                                        window.width / 3, window.height - 2 * BORDER);
-                    xPos += window.width / 3;
+                                        width, window.height - 2 * BORDER);
+                    xPos += width;
                     auto active = files.front;
                     gui.label("Filename:");
                     gui.value(active);
