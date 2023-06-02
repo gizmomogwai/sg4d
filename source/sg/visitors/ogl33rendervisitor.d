@@ -540,28 +540,28 @@ version (GL_33)
             if (image.type == PixelType.rgb8)
             {
                 GL_TEXTURE_2D.glTexImage2D( // target
-                    0, // level
-                    GL_RGB, // internalFormat
-                    image.width, // width
-                    image.height, // height
-                    0, // border
-                    GL_RGB, // format
-                    GL_UNSIGNED_BYTE, // type
-                    image.scanptr(0) // pixels
-                    );
+                        0, // level
+                        GL_RGB, // internalFormat
+                        image.width, // width
+                        image.height, // height
+                        0, // border
+                        GL_RGB, // format
+                        GL_UNSIGNED_BYTE, // type
+                        image.scanptr(0) // pixels
+                        );
             }
             else if (image.type == PixelType.rgba8)
             {
                 GL_TEXTURE_2D.glTexImage2D( // target
-                    0, // level
-                    GL_RGBA, // internalFormat
-                    image.width, // width
-                    image.height, // height
-                    0, // border
-                    GL_RGBA, // format
-                    GL_UNSIGNED_BYTE, // type
-                    image.scanptr(0) // pixels
-                    );
+                        0, // level
+                        GL_RGBA, // internalFormat
+                        image.width, // width
+                        image.height, // height
+                        0, // border
+                        GL_RGBA, // format
+                        GL_UNSIGNED_BYTE, // type
+                        image.scanptr(0) // pixels
+                        );
             }
             else
             {

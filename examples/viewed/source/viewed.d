@@ -1,13 +1,16 @@
 module viewed;
 
 import argparse : NamedArgument, CLI;
-import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
+import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH,
+    glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
 import gamut : Image;
 import gl3n.linalg : vec2, vec3;
 import mir.deser.json : deserializeJson;
 import mir.ser.json : serializeJson;
-import sg : Texture, ParallelProjection, ShapeGroup, Geometry, IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance, ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
+import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
+    IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance,
+    ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
@@ -48,15 +51,15 @@ class Files
     size_t currentIndex;
     this(string directory)
     {
-        files = directory.dirEntries("{*.jpg,*.png}", SpanMode.depth).array.sort.array;
+        files = directory.expandTilde.dirEntries("{*.jpg,*.png}", SpanMode.depth).array.sort.array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
     }
 
     this(string[] directories)
     {
-        files = directories.map!(dir => dir.dirEntries("*.jpg", SpanMode.depth)
-                .array.sort).joiner.array;
+        files = directories.map!(dir => dir.expandTilde.dirEntries("*.jpg",
+                SpanMode.depth).array.sort).joiner.array;
     }
 
     void select(DirEntry file)
@@ -493,14 +496,15 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getAndResetScrollInfo();
-                gui.beginFrame(MouseInfo(mouse.x, mouse.y, mouse.button, cast(int) scrollInfo.xOffset, cast(int)scrollInfo.yOffset), 0);
+                gui.beginFrame(MouseInfo(mouse.x, mouse.y, mouse.button,
+                        cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset), 0);
                 if (showFileList)
                 {
                     xPos += BORDER;
                     int width = window.width / 3;
-                    gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex+1,
-                                                                       files.array.length), xPos, BORDER, width,
-                                        window.height - 2 * BORDER, true, 2000);
+                    gui.beginScrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
+                            files.array.length), xPos, BORDER, width,
+                            window.height - 2 * BORDER, true, 2000);
                     xPos += width;
                     foreach (file; files.array)
                     {
@@ -537,8 +541,8 @@ void viewed(Args args)
                 {
                     xPos += BORDER;
                     int width = max(0, window.width - BORDER - xPos);
-                    gui.beginScrollArea(fileInfo, "Info", xPos, BORDER,
-                                        width, window.height - 2 * BORDER);
+                    gui.beginScrollArea(fileInfo, "Info", xPos, BORDER, width,
+                            window.height - 2 * BORDER);
                     xPos += width;
                     auto active = files.front;
                     gui.label("Filename:");
@@ -580,7 +584,8 @@ void viewed(Args args)
                 gui.endFrame();
                 if (showFileInfo || showFileList)
                 {
-                    import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
+                    import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
+                        GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
 
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
