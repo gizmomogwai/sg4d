@@ -31,6 +31,19 @@ import core.time : Duration;
 bool imageChangedByKey = false;
 bool firstImage = true;
 
+string formatBigNumber(T)(const T number)
+{
+    import std.format.spec : singleSpec;
+    import std.format.write : formatValue;
+    import std.array : appender;
+
+    auto buffer = appender!string();
+    static spec = "%,3d".singleSpec;
+    spec.separatorChar = '.';
+    buffer.formatValue(number, spec);
+    return buffer[];
+}
+
 static struct Args
 {
     @NamedArgument("directory", "dir", "d")
@@ -549,25 +562,17 @@ void viewed(Args args)
                     gui.value(active);
                     gui.separatorLine();
                     gui.label("Filesize:");
-                    string formatFileSize(const ulong fileSize)
-                    {
-                        import std.format.spec : singleSpec;
-                        import std.format.write : formatValue;
-                        import std.array : appender;
 
-                        auto buffer = appender!string();
-                        static spec = "%,3d".singleSpec;
-                        spec.separatorChar = '.';
-                        buffer.formatValue(fileSize, spec);
-                        return buffer[];
-                    }
-
-                    gui.value(formatFileSize(active.size));
+                    gui.value(active.size.formatBigNumber);
                     gui.separatorLine();
                     if (!currentImageDimension.x.isNaN)
                     {
                         gui.label("Dimension:");
                         gui.value(currentImageDimension.to!string);
+                        gui.separatorLine();
+                        gui.label("Pixels:");
+                        gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                                .formatBigNumber);
                         gui.separatorLine();
                     }
                     if (currentError.length)
