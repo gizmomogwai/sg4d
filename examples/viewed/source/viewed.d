@@ -619,8 +619,9 @@ void viewed(Args args)
 
         window.window.glfwSwapBuffers();
 
-        // poll glfw and scene graph "events"
+        // poll glfw
         glfwPollEvents();
+        // and scene graph "events"
         // dfmt off
         receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
