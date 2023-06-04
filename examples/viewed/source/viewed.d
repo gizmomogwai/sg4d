@@ -512,8 +512,14 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getAndResetScrollInfo();
-                gui.beginFrame(MouseInfo(mouse.x, mouse.y, mouse.button,
-                        cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset), 0);
+                // dfmt off
+                gui.beginFrame(
+                    MouseInfo(mouse.x, mouse.y,
+                              mouse.button,
+                              cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
+                    window.width, window.height,
+                    0);
+                // dfmt on
                 if (showFileList)
                 {
                     xPos += BORDER;
@@ -598,7 +604,7 @@ void viewed(Args args)
                     glEnable(GL_BLEND);
                     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                     glDisable(GL_DEPTH_TEST);
-                    gui.render(window.width, window.height);
+                    gui.render();
                 }
             }
         }
