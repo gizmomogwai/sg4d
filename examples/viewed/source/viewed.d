@@ -277,10 +277,11 @@ static class State
     }
 }
 
-auto getFiles(Args args)
+auto getFiles(ref Args args)
 {
     if (args.album.length > 0)
     {
+        args.album = args.album.expandTilde;
         string[] directories = args.album
             .readText
             .deserializeJson!(string[])
@@ -290,6 +291,7 @@ auto getFiles(Args args)
     }
     else
     {
+        args.directory = args.directory.expandTilde;
         return new Files(args.directory);
     }
 }
@@ -322,6 +324,7 @@ void viewed(Args args)
     auto loadDuration = sw.peek.total!("msecs");
     writeln("single threaded ", benchmark, ": ", loadDuration);
     +/
+    args.directory.expandTilde;
     bool showFileList = false;
     bool showFileInfo = false;
     vec2 currentImageDimension;
