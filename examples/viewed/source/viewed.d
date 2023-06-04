@@ -2,7 +2,7 @@ module viewed;
 
 import argparse : NamedArgument, CLI;
 import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH,
-    glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
+    GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
 import gamut : Image;
 import gl3n.linalg : vec2, vec3;
@@ -112,7 +112,14 @@ class Files
         }
         else
         {
-            currentIndex = (files.length - 1).to!int;
+            if (files.length == 0)
+            {
+                throw new Exception("No images");
+            }
+            else
+            {
+                currentIndex = files.length - 1;
+            }
         }
     }
 
@@ -121,9 +128,9 @@ class Files
         return files;
     }
 
-    auto jumpTo(string s)
+    void jumpTo(in string s)
     {
-        auto h = files.countUntil!(v => v.to!string == s);
+        const h = files.countUntil!(v => v.to!string == s);
         if (h != -1)
         {
             currentIndex = h;
@@ -180,25 +187,19 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
 {
     try
     {
-        auto sw = StopWatch(AutoStart.yes);
+        const sw = StopWatch(AutoStart.yes);
 
         Image* image = new Image;
         image.loadFromFile(nextFile.name);
         auto loadDuration = sw.peek.total!("msecs");
-        writeln("Image %s load%sin %sms".format(nextFile.name, image.isValid
-                ? "ed sucessfully " : "ing failed ", loadDuration));
-
+        // dfmt off
+        writeln("Image %s load%sin %sms".format(
+                    nextFile.name,
+                    image.isValid ? "ed sucessfully " : "ing failed ",
+                    loadDuration));
+        // dfmt on
         image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name,
                 image.errorMessage), image.errorMessage.to!string, loadDuration));
-        /+
-        writeln("valid: ", image.isValid);
-        writeln("type: ", image.type);
-        writeln("pitch: ", image.pitchInBytes);
-        writeln("width: ", image.width);
-        writeln("1st row: ", image.scanptr(0));
-        writeln("2nd row: ", image.scanptr(1));
-        writeln("diff: ", image.scanptr(1) - image.scanptr(0));
-        +/
         if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width * 4))
         {
             throw new LoadException("Image with filler bytes at the end of a row",
@@ -344,7 +345,7 @@ void viewed(Args args)
     void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w)
     {
         auto position = vec3(newPosition.x, newPosition.y, 100);
-        auto scaledImage = imageDimension * zoom;
+        const scaledImage = imageDimension * zoom;
 
         if (scaledImage.x <= w.getWidth)
         {
@@ -371,16 +372,15 @@ void viewed(Args args)
         zoom = newZoom;
         observer.get.setProjection(zoom.getProjection);
 
-        auto windowSize = vec2(w.getWidth, w.getHeight);
-        auto position = observer.get.getPosition.xy;
-        auto originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
+        const windowSize = vec2(w.getWidth, w.getHeight);
+        const position = observer.get.getPosition.xy;
+        const originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
         auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
 
         adjustAndSetPosition(newPosition, imageDimension, zoom, w);
     }
 
-    void doZoom(Window w, int input, int key, float newZoom, Observer observer,
-            int action, vec2 imageDimension)
+    void doZoom(Window w, int input, int key, float newZoom, int action, vec2 imageDimension)
     {
         if ((input == key) && (action == GLFW_RELEASE))
         {
@@ -440,7 +440,7 @@ void viewed(Args args)
             scene.get.accept(new PrintVisitor());
             return;
         }
-        if ((key == 'B') && (action == GLFW_RELEASE))
+        if (((key == 'B') || (key == GLFW_KEY_LEFT)) && (action == GLFW_RELEASE))
         {
             files.popBack;
             state = state.updateAndStore(files, args);
@@ -448,7 +448,7 @@ void viewed(Args args)
             imageChangedByKey = true;
             return;
         }
-        if (((key == 'N') || (key == ' ')) && (action == GLFW_RELEASE))
+        if (((key == 'N') || (key == ' ') || (key == GLFW_KEY_RIGHT)) && (action == GLFW_RELEASE))
         {
             files.popFront;
             state = state.updateAndStore(files, args);
@@ -457,16 +457,16 @@ void viewed(Args args)
             return;
         }
 
-        doZoom(w, key, '1', 1.0 / 16, observer, action, currentImageDimension);
-        doZoom(w, key, '2', 1.0 / 8, observer, action, currentImageDimension);
-        doZoom(w, key, '3', 1.0 / 4, observer, action, currentImageDimension);
-        doZoom(w, key, '4', 1.0 / 3, observer, action, currentImageDimension);
-        doZoom(w, key, '5', 1.0, observer, action, currentImageDimension);
-        doZoom(w, key, '6', 1.0 * 2, observer, action, currentImageDimension);
-        doZoom(w, key, '7', 1.0 * 3, observer, action, currentImageDimension);
-        doZoom(w, key, '8', 1.0 * 4, observer, action, currentImageDimension);
-        doZoom(w, key, '9', 1.0 * 5, observer, action, currentImageDimension);
-        doZoom(w, key, '0', 1.0 * 6, observer, action, currentImageDimension);
+        doZoom(w, key, '1', 1.0 / 16, action, currentImageDimension);
+        doZoom(w, key, '2', 1.0 / 8, action, currentImageDimension);
+        doZoom(w, key, '3', 1.0 / 4, action, currentImageDimension);
+        doZoom(w, key, '4', 1.0 / 3, action, currentImageDimension);
+        doZoom(w, key, '5', 1.0, action, currentImageDimension);
+        doZoom(w, key, '6', 1.0 * 2, action, currentImageDimension);
+        doZoom(w, key, '7', 1.0 * 3, action, currentImageDimension);
+        doZoom(w, key, '8', 1.0 * 4, action, currentImageDimension);
+        doZoom(w, key, '9', 1.0 * 5, action, currentImageDimension);
+        doZoom(w, key, '0', 1.0 * 6, action, currentImageDimension);
     });
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
@@ -500,7 +500,7 @@ void viewed(Args args)
             alias visit = Visitor.visit;
             override void visit(SceneData n)
             {
-                bool uiActive = showFileInfo || showFileList;
+                const uiActive = showFileInfo || showFileList;
                 if (!uiActive)
                 {
                     return;
@@ -553,7 +553,7 @@ void viewed(Args args)
                 if (showFileInfo)
                 {
                     xPos += BORDER;
-                    int width = max(0, window.width - BORDER - xPos);
+                    const width = max(0, window.width - BORDER - xPos);
                     gui.beginScrollArea(fileInfo, "Info", xPos, BORDER, width,
                             window.height - 2 * BORDER);
                     xPos += width;
