@@ -1,7 +1,7 @@
 module viewed;
 
 import argparse : NamedArgument, CLI;
-import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH,
+import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, GLFW_KEY_COMMA,
     GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
 import gamut : Image;
@@ -327,6 +327,7 @@ void viewed(Args args)
     args.directory.expandTilde;
     bool showFileList = false;
     bool showFileInfo = false;
+    bool showStats = false;
     vec2 currentImageDimension;
     long currentLoadDuration;
     string currentError;
@@ -438,6 +439,11 @@ void viewed(Args args)
             showFileInfo = !showFileInfo;
             return;
         }
+        if ((key == GLFW_KEY_COMMA) && (action == GLFW_RELEASE))
+        {
+            showStats = !showStats;
+            return;
+        }
         if ((key == 'P') && (action == GLFW_RELEASE))
         {
             scene.get.accept(new PrintVisitor());
@@ -494,6 +500,8 @@ void viewed(Args args)
             ImGui gui;
             ScrollAreaContext fileList;
             ScrollAreaContext fileInfo;
+            ScrollAreaContext stats;
+            Duration renderTime;
             this()
             {
                 gui = new ImGui();
@@ -503,7 +511,10 @@ void viewed(Args args)
             alias visit = Visitor.visit;
             override void visit(SceneData n)
             {
-                const uiActive = showFileInfo || showFileList;
+                import std.datetime.stopwatch : StopWatch, AutoStart;
+
+                auto sw = StopWatch(AutoStart.yes);
+                const uiActive = showFileInfo || showFileList || showStats;
                 if (!uiActive)
                 {
                     return;
@@ -559,6 +570,19 @@ void viewed(Args args)
                     }
                     gui.endScrollArea(fileList);
                 }
+                if (showStats)
+                {
+                    xPos += BORDER;
+                    const width = window.width / 4;
+                    gui.beginScrollArea(stats, "Stats", xPos, BORDER, width,
+                            window.height - 2 * BORDER);
+                    xPos += width;
+                    gui.label("UI Rendertime:");
+                    gui.value(renderTime.total!("msecs")
+                            .to!string);
+                    gui.separatorLine();
+                    gui.endScrollArea(stats);
+                }
                 if (showFileInfo)
                 {
                     xPos += BORDER;
@@ -596,7 +620,7 @@ void viewed(Args args)
                     gui.endScrollArea(fileInfo);
                 }
                 gui.endFrame();
-                if (showFileInfo || showFileList)
+                if (uiActive)
                 {
                     import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
                         GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
@@ -606,6 +630,7 @@ void viewed(Args args)
                     glDisable(GL_DEPTH_TEST);
                     gui.render();
                 }
+                renderTime = sw.peek;
             }
         }
     }
