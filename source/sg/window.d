@@ -11,18 +11,19 @@ import std.concurrency : thisTid;
 import std.conv : to;
 import std.exception : enforce;
 import std.stdio : writeln;
+import std.string : format;
 
 void loadBindBCGlfw()
 {
     const result = loadGLFW();
-    writeln(result);
     if (result != glfwSupport)
     {
+        string errorMessage = "Cannot load glfw";
         foreach (info; bindbc.loader.sharedlib.errors)
         {
-            writeln("error: ", info.message);
+            errorMessage ~= "\n  %s".format(info.message.to!string);
         }
-        throw new Exception("Cannot load glfw");
+        throw new Exception(errorMessage);
     }
 }
 

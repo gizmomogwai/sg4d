@@ -504,8 +504,7 @@ void viewed(Args args)
             Duration renderTime;
             this()
             {
-                gui = new ImGui();
-                gui.init("~/.config/viewed/font.ttf".expandTilde).enforce;
+                gui = new ImGui("~/.config/viewed/font.ttf".expandTilde);
             }
 
             alias visit = Visitor.visit;
