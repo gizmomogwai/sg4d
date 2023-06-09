@@ -6,21 +6,15 @@
 // http://www.lighthouse3d.com/tutorials/glsl-tutorial/hello-world/
 module sg.sg;
 
-import btl.autoptr.common;
-import btl.autoptr.intrusive_ptr;
-import btl.vector;
-import core.stdc.stdio;
-import optional;
-import std.concurrency;
-import std.exception;
-import std.math;
-import std.stdio;
-import std.string;
-import std.typecons : BitFlags;
-import sg.window;
+import btl.autoptr.common : SharedControlBlock;
+import btl.autoptr.intrusive_ptr : IntrusivePtr;
+import btl.vector : Vector;
 import gamut : Image;
-
-import gl3n.linalg;
+import gl3n.linalg : mat4, vec2, vec3, vec4;
+import std.concurrency : Tid, thisTid;
+import std.exception : enforce;
+import std.string : toStringz, format;
+import std.typecons : BitFlags;
 
 alias CustomData = IntrusivePtr!CustomDataData;
 class CustomDataData

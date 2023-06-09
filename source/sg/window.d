@@ -1,12 +1,9 @@
 module sg.window;
 
-import bindbc.glfw;
-import bindbc.loader.sharedlib;
-import bindbc.opengl;
-import btl.autoptr.common;
-import btl.autoptr.intrusive_ptr;
-import sg.visitors.oglhelper;
-import sg;
+import bindbc.glfw : loadGLFW, GLFWwindow, glfwSupport, glfwInit, glfwWindowHint, glfwCreateWindow, glfwSetWindowUserPointer, GLFW_CONTEXT_VERSION_MAJOR, GLFW_CONTEXT_VERSION_MINOR, GLFW_OPENGL_FORWARD_COMPAT, GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE, glfwSetKeyCallback, glfwSetFramebufferSizeCallback, glfwSetWindowSize, glfwSetWindowPos, glfwSetScrollCallback, glfwSwapInterval, glfwGetFramebufferSize, glfwMakeContextCurrent, glfwTerminate, glfwGetCursorPos, glfwGetWindowSize, glfwGetMouseButton, GLFW_PRESS, GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_RIGHT, glfwGetWindowUserPointer;
+import bindbc.opengl : loadOpenGL, GLSupport, GL_TRUE, glGetString, GL_MAX_TEXTURE_SIZE, GL_VENDOR, GL_RENDERER, GL_VERSION;
+import sg.visitors.oglhelper : glGetInt;
+import sg : Scene;
 import std.concurrency : thisTid;
 import std.conv : to;
 import std.exception : enforce;
@@ -19,7 +16,8 @@ void loadBindBCGlfw()
     if (result != glfwSupport)
     {
         string errorMessage = "Cannot load glfw";
-        foreach (info; bindbc.loader.sharedlib.errors)
+        import bindbc.loader.sharedlib : errors;
+        foreach (info; errors)
         {
             errorMessage ~= "\n  %s".format(info.message.to!string);
         }
@@ -86,6 +84,7 @@ class Window
         window.glfwSetFramebufferSizeCallback(&staticSizeCallback);
         window.glfwSetWindowSize(width, height);
         window.glfwSetScrollCallback(&staticScrollCallback);
+        glfwSwapInterval(1);
 
         int w, h;
         window.glfwGetFramebufferSize(&w, &h);
@@ -100,7 +99,7 @@ class Window
         {
             writeln("OGLExt:           ", glGetString(GL_EXTENSIONS).to!string);
         }
-        writeln("MAX_TEXTURE_SIZE: ", glGetInt(GL_MAX_TEXTURE_SIZE).to!string);
+        writeln("MAX_TEXTURE_SIZE: ", glGetInt(GL_MAX_TEXTURE_SIZE));
     }
 
     ~this()

@@ -5,20 +5,17 @@ module sg.visitors.ogl33rendervisitor;
 
 version (GL_33)
 {
-    import bindbc.opengl;
-    import sg.visitors.oglhelper;
-    import std;
-    import sg;
-    import sg.visitors;
+    import bindbc.opengl : GLuint, glGenTextures, glDeleteTextures, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, glShaderSource, glCompileShader, GLint, glGetShaderiv, GLchar, GLsizei, glGetShaderInfoLog, glCreateShader, GL_COMPILE_STATUS, glDeleteShader, glCreateProgram, glDeleteProgram, glAttachShader, glLinkProgram, glGetProgramiv, glGetProgramInfoLog, glUniformMatrix4fv, glGetUniformLocation, glGetAttribLocation, glUseProgram, glGenVertexArrays, glBindVertexArray,glGenBuffers, GL_ARRAY_BUFFER, GL_LINK_STATUS, GL_TRUE, glBindBuffer, GL_ELEMENT_ARRAY_BUFFER, glClear, glClearColor, glFrontFace, glCullFace, glEnable, glDisable, glViewport, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_CCW, GL_BACK, GL_CULL_FACE, GL_DITHER, GL_DEPTH_TEST, glBufferData, glVertexAttribPointer, GL_STATIC_DRAW, GL_FLOAT, GL_FALSE, glEnableVertexAttribArray, GL_TEXTURE_2D, GL_UNPACK_ALIGNMENT, GL_TEXTURE0, GL_TRIANGLES, glPixelStorei, glTexImage2D, glTexParameteri,glActiveTexture, glBindTexture, glDrawArrays, glDrawElements, GL_RGB, GL_UNSIGNED_BYTE, GL_RGBA, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_NEAREST, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_REPEAT, GL_CLAMP_TO_EDGE, GL_UNSIGNED_INT;
+    import sg.visitors.oglhelper : checkOglErrors;
+    import sg : CustomDataData, Visitor, NodeData, GroupData, SceneData, ProjectionGroupData, ObserverData, TransformationGroupData, AppearanceData, TriangleArrayData, TextureData, IndexedInterleavedTriangleArrayData, ShapeGroupData, Behavior;
+    import std.stdio : writeln;
     import sg.window : Window;
-    import std.concurrency;
-    import std.conv;
-    import std.exception;
-    import std.string;
-    import btl.autoptr.common;
-    import btl.autoptr.intrusive_ptr;
-    import core.stdc.stdio;
-    import gl3n.linalg;
+    import std.concurrency : Tid, thisTid;
+    import std.conv : to;
+    import std.exception : enforce;
+    import std.string : format, startsWith;
+    import btl.autoptr.intrusive_ptr : IntrusivePtr, dynCast;
+    import gl3n.linalg : mat4, vec2, vec3, vec4;
     import gamut.types : PixelType;
 
     alias TextureName = IntrusivePtr!TextureNameData;
@@ -201,8 +198,6 @@ version (GL_33)
             }
             catch (Exception e)
             {
-                import std.stdio;
-
                 writeln(e);
             }
         }

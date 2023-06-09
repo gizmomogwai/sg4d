@@ -1,8 +1,6 @@
 module sg.visitors;
 
-import sg;
-import sg.window;
-import std.concurrency;
+import sg.sg : Behavior, Visitor, NodeData, GroupData, SceneData, ProjectionGroupData, ObserverData, TransformationGroupData, ShapeGroupData, NodeData;
 
 version (Default)
 {
