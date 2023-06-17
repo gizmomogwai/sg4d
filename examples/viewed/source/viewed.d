@@ -513,8 +513,7 @@ void viewed(Args args)
                 import std.datetime.stopwatch : StopWatch, AutoStart;
 
                 auto sw = StopWatch(AutoStart.yes);
-                const uiActive = showFileInfo || showFileList || showStats;
-                if (!uiActive)
+                if (showFileInfo == false && showFileList == false && showStats == false)
                 {
                     return;
                 }
@@ -522,118 +521,107 @@ void viewed(Args args)
                 int xPos = 0;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getAndResetScrollInfo();
-                // dfmt off
-                gui.beginFrame(
-                    MouseInfo(mouse.x, mouse.y,
-                              mouse.button,
-                              cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
-                    window.width, window.height,
-                    0);
-                // dfmt on
-                if (showFileList)
-                {
-                    xPos += BORDER;
-                    int width = window.width / 3;
-                    gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
+                gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
+                        cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
+                        window.width, window.height, 0, () {
+                    if (showFileList)
+                    {
+                        xPos += BORDER;
+                        int width = window.width / 3;
+                        gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
                             files.array.length), xPos, BORDER, width,
                             window.height - 2 * BORDER, () {
 
-                        xPos += width;
-                        foreach (file; files.array)
-                        {
-                            const active = file == files.front;
-                            if ((imageChangedByKey || firstImage) && active)
+                            xPos += width;
+                            foreach (file; files.array)
                             {
-                                gui.revealNextElement(fileList);
-                                imageChangedByKey = false;
-                                firstImage = false;
-                            }
-                            // dfmt off
+                                const active = file == files.front;
+                                if ((imageChangedByKey || firstImage) && active)
+                                {
+                                    gui.revealNextElement(fileList);
+                                    imageChangedByKey = false;
+                                    firstImage = false;
+                                }
+                                // dfmt off
                         const shortenedFilename = file
                             .to!string
                             .replace(args.directory !is null ? args.directory : "", "")
                             .replace(args.album !is null? args.album.dirName : "", "")
                             .replaceFirst(regex("^/"), "");
                         // dfmt on
-                            const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
-                            if (gui.button(title, active ? Enabled.no : Enabled.yes))
-                            {
-                                files.select(file);
-                                state = state.updateAndStore(files, args);
-                                // dfmt off
+                                const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                                if (gui.button(title, active ? Enabled.no : Enabled.yes))
+                                {
+                                    files.select(file);
+                                    state = state.updateAndStore(files, args);
+                                    // dfmt off
                             spawn(
                                 &loadNextImageSpawnable,
                                 vec2(window.width, window.height),
                                 files.front);
                             // dfmt on
+                                }
                             }
-                        }
-                    }, true, 2000);
-                }
-                if (showStats)
-                {
-                    xPos += BORDER;
-                    const width = window.width / 4;
-                    gui.scrollArea(stats, "Stats", xPos, BORDER, width,
+                        }, true, 2000);
+                    }
+                    if (showStats)
+                    {
+                        xPos += BORDER;
+                        const width = window.width / 4;
+                        gui.scrollArea(stats, "Stats", xPos, BORDER, width,
                             window.height - 2 * BORDER, () {
-                        xPos += width;
-                        gui.label("UI Rendertime:");
-                        gui.value(renderTime.total!("msecs")
+                            xPos += width;
+                            gui.label("UI Rendertime:");
+                            gui.value(renderTime.total!("msecs")
                             .to!string);
-                        gui.separatorLine();
-                    });
-                }
-                if (showFileInfo)
-                {
-                    xPos += BORDER;
-                    const width = max(0, window.width - BORDER - xPos);
-                    gui.scrollArea(fileInfo, "Info", xPos, BORDER, width,
+                            gui.separatorLine();
+                        });
+                    }
+                    if (showFileInfo)
+                    {
+                        xPos += BORDER;
+                        const width = max(0, window.width - BORDER - xPos);
+                        gui.scrollArea(fileInfo, "Info", xPos, BORDER, width,
                             window.height - 2 * BORDER, () {
-                        xPos += width;
-                        auto active = files.front;
-                        gui.label("Filename:");
-                        gui.value(active);
-                        gui.separatorLine();
-                        gui.label("Filesize:");
-
-                        gui.value(active.size.formatBigNumber);
-                        gui.separatorLine();
-                        if (!currentImageDimension.x.isNaN)
-                        {
-                            gui.label("Dimension:");
-                            gui.value(currentImageDimension.to!string);
+                            xPos += width;
+                            auto active = files.front;
+                            gui.label("Filename:");
+                            gui.value(active);
                             gui.separatorLine();
-                            gui.label("Pixels:");
-                            gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                            gui.label("Filesize:");
+
+                            gui.value(active.size.formatBigNumber);
+                            gui.separatorLine();
+                            if (!currentImageDimension.x.isNaN)
+                            {
+                                gui.label("Dimension:");
+                                gui.value(currentImageDimension.to!string);
+                                gui.separatorLine();
+                                gui.label("Pixels:");
+                                gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
                                 .formatBigNumber);
+                                gui.separatorLine();
+                            }
+                            if (currentError.length)
+                            {
+                                gui.label("Error:");
+                                gui.value(currentError);
+                                gui.separatorLine();
+                            }
+                            gui.label("Load duration:");
+                            gui.value(currentLoadDuration.to!string);
                             gui.separatorLine();
-                        }
-                        if (currentError.length)
-                        {
-                            gui.label("Error:");
-                            gui.value(currentError);
-                            gui.separatorLine();
-                        }
-                        gui.label("Load duration:");
-                        gui.value(currentLoadDuration.to!string);
-                        gui.separatorLine();
-                    });
-                }
-                gui.endFrame();
-                if (uiActive)
-                {
-                    import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
-                        GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
+                        });
+                    }
+                });
+                import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
+                    GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
 
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    glDisable(GL_DEPTH_TEST);
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                glDisable(GL_DEPTH_TEST);
+                gui.render();
 
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    glDisable(GL_DEPTH_TEST);
-                    gui.render();
-                }
                 renderTime = sw.peek;
             }
         }
