@@ -328,6 +328,7 @@ void viewed(Args args)
     bool showFileList = false;
     bool showFileInfo = false;
     bool showStats = false;
+    bool showGui = false;
     vec2 currentImageDimension;
     long currentLoadDuration;
     string currentError;
@@ -399,6 +400,7 @@ void viewed(Args args)
     }
 
     auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/ , int action, int /+mods+/ ) {
+        // movement
         if (key == 'W')
         {
             move(0, 10, w, currentImageDimension, zoom);
@@ -429,26 +431,18 @@ void viewed(Args args)
             zoomImage(w, currentImageDimension, zoom, zoom - zoomDelta);
             return;
         }
-        if ((key == 'F') && (action == GLFW_RELEASE))
-        {
-            showFileList = !showFileList;
-            return;
-        }
-        if ((key == 'I') && (action == GLFW_RELEASE))
-        {
-            showFileInfo = !showFileInfo;
-            return;
-        }
-        if ((key == GLFW_KEY_COMMA) && (action == GLFW_RELEASE))
-        {
-            showStats = !showStats;
-            return;
-        }
-        if ((key == 'P') && (action == GLFW_RELEASE))
-        {
-            scene.get.accept(new PrintVisitor());
-            return;
-        }
+        doZoom(w, key, '1', 1.0 / 16, action, currentImageDimension);
+        doZoom(w, key, '2', 1.0 / 8, action, currentImageDimension);
+        doZoom(w, key, '3', 1.0 / 4, action, currentImageDimension);
+        doZoom(w, key, '4', 1.0 / 3, action, currentImageDimension);
+        doZoom(w, key, '5', 1.0, action, currentImageDimension);
+        doZoom(w, key, '6', 1.0 * 2, action, currentImageDimension);
+        doZoom(w, key, '7', 1.0 * 3, action, currentImageDimension);
+        doZoom(w, key, '8', 1.0 * 4, action, currentImageDimension);
+        doZoom(w, key, '9', 1.0 * 5, action, currentImageDimension);
+        doZoom(w, key, '0', 1.0 * 6, action, currentImageDimension);
+
+        // image navigation
         if (((key == 'B') || (key == GLFW_KEY_LEFT)) && (action == GLFW_RELEASE))
         {
             files.popBack;
@@ -466,16 +460,35 @@ void viewed(Args args)
             return;
         }
 
-        doZoom(w, key, '1', 1.0 / 16, action, currentImageDimension);
-        doZoom(w, key, '2', 1.0 / 8, action, currentImageDimension);
-        doZoom(w, key, '3', 1.0 / 4, action, currentImageDimension);
-        doZoom(w, key, '4', 1.0 / 3, action, currentImageDimension);
-        doZoom(w, key, '5', 1.0, action, currentImageDimension);
-        doZoom(w, key, '6', 1.0 * 2, action, currentImageDimension);
-        doZoom(w, key, '7', 1.0 * 3, action, currentImageDimension);
-        doZoom(w, key, '8', 1.0 * 4, action, currentImageDimension);
-        doZoom(w, key, '9', 1.0 * 5, action, currentImageDimension);
-        doZoom(w, key, '0', 1.0 * 6, action, currentImageDimension);
+        // gui
+        if ((key == 'F') && (action == GLFW_RELEASE))
+        {
+            showFileList = !showFileList;
+            return;
+        }
+        if ((key == 'I') && (action == GLFW_RELEASE))
+        {
+            showFileInfo = !showFileInfo;
+            return;
+        }
+        if ((key == GLFW_KEY_COMMA) && (action == GLFW_RELEASE))
+        {
+            showStats = !showStats;
+            return;
+        }
+        if ((key == 'G') && (action == GLFW_RELEASE))
+        {
+            showGui = !showGui;
+            return;
+        }
+
+        // debug
+        if ((key == 'P') && (action == GLFW_RELEASE))
+        {
+            scene.get.accept(new PrintVisitor());
+            return;
+        }
+
     });
 
     loadNextImage(thisTid, vec2(window.width, window.height), files.front);
@@ -495,9 +508,10 @@ void viewed(Args args)
     {
         class ImguiVisitor : Visitor
         {
-            import imgui : ImGui, ScrollAreaContext, MouseInfo, Enabled;
+            import imgui : ImGui, ScrollAreaContext, MouseInfo, Enabled, Sizes;
 
             ImGui gui;
+            ScrollAreaContext viewedGui;
             ScrollAreaContext fileList;
             ScrollAreaContext fileInfo;
             ScrollAreaContext stats;
@@ -513,24 +527,41 @@ void viewed(Args args)
                 import std.datetime.stopwatch : StopWatch, AutoStart;
 
                 auto sw = StopWatch(AutoStart.yes);
-                if (showFileInfo == false && showFileList == false && showStats == false)
+                if (showFileInfo == false && showFileList == false
+                        && showStats == false && showGui == false)
                 {
                     return;
                 }
                 enum BORDER = 20;
                 int xPos = 0;
+                int yPos = BORDER;
+                int height = window.height - 2 * BORDER;
                 auto mouse = window.getMouseInfo();
                 auto scrollInfo = window.getAndResetScrollInfo();
                 gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                         cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
                         window.width, window.height, 0, () {
+                    if (showGui)
+                    {
+                        int scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
+                            + Sizes.SLIDER_HEIGHT + Sizes.SCROLL_BAR_SIZE;
+                        gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
+                            window.height - BORDER - scrollHeight,
+                            window.width - 2 * BORDER, scrollHeight, () {
+                            float oldZoom = zoom;
+                            if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
+                            {
+                                zoomImage(window, currentImageDimension, oldZoom, zoom);
+                            }
+                        }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
+                        height -= scrollHeight + BORDER;
+                    }
                     if (showFileList)
                     {
                         xPos += BORDER;
-                        int width = window.width / 3;
+                        const width = window.width / 3;
                         gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
-                            files.array.length), xPos, BORDER, width,
-                            window.height - 2 * BORDER, () {
+                            files.array.length), xPos, yPos, width, height, () {
 
                             xPos += width;
                             foreach (file; files.array)
@@ -568,8 +599,7 @@ void viewed(Args args)
                     {
                         xPos += BORDER;
                         const width = window.width / 4;
-                        gui.scrollArea(stats, "Stats", xPos, BORDER, width,
-                            window.height - 2 * BORDER, () {
+                        gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {
                             xPos += width;
                             gui.label("UI Rendertime:");
                             gui.value(renderTime.total!("msecs")
@@ -581,8 +611,7 @@ void viewed(Args args)
                     {
                         xPos += BORDER;
                         const width = max(0, window.width - BORDER - xPos);
-                        gui.scrollArea(fileInfo, "Info", xPos, BORDER, width,
-                            window.height - 2 * BORDER, () {
+                        gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {
                             xPos += width;
                             auto active = files.front;
                             gui.label("Filename:");
