@@ -1,7 +1,22 @@
 module sg.window;
 
-import bindbc.glfw : loadGLFW, GLFWwindow, glfwSupport, glfwInit, glfwWindowHint, glfwCreateWindow, glfwSetWindowUserPointer, GLFW_CONTEXT_VERSION_MAJOR, GLFW_CONTEXT_VERSION_MINOR, GLFW_OPENGL_FORWARD_COMPAT, GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE, glfwSetKeyCallback, glfwSetFramebufferSizeCallback, glfwSetWindowSize, glfwSetWindowPos, glfwSetScrollCallback, glfwSwapInterval, glfwGetFramebufferSize, glfwMakeContextCurrent, glfwTerminate, glfwGetCursorPos, glfwGetWindowSize, glfwGetMouseButton, GLFW_PRESS, GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_RIGHT, glfwGetWindowUserPointer;
-import bindbc.opengl : loadOpenGL, GLSupport, GL_TRUE, glGetString, GL_MAX_TEXTURE_SIZE, GL_VENDOR, GL_RENDERER, GL_VERSION;
+import bindbc.glfw : loadGLFW, GLFWwindow, glfwSupport,
+    glfwInit, glfwWindowHint, glfwCreateWindow, glfwSetWindowUserPointer,
+    GLFW_CONTEXT_VERSION_MAJOR, GLFW_CONTEXT_VERSION_MINOR,
+    GLFW_OPENGL_FORWARD_COMPAT,
+    GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE, glfwSetKeyCallback,
+    glfwSetFramebufferSizeCallback, glfwSetWindowSize, glfwSetWindowPos,
+    glfwSetScrollCallback, glfwSwapInterval, glfwGetFramebufferSize,
+    glfwMakeContextCurrent,
+    glfwTerminate, glfwGetCursorPos, glfwGetWindowSize, glfwGetMouseButton,
+    GLFW_PRESS, GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_RIGHT, glfwGetWindowUserPointer;
+import bindbc.opengl : loadOpenGL, GLSupport, GL_TRUE, glGetString,
+    GL_MAX_TEXTURE_SIZE, GL_VENDOR, GL_RENDERER, GL_VERSION;
+version (Default)
+{
+    import bindbc.opengl : GL_EXTENSIONS;
+}
+
 import sg.visitors.oglhelper : glGetInt;
 import sg : Scene;
 import std.concurrency : thisTid;
@@ -17,6 +32,7 @@ void loadBindBCGlfw()
     {
         string errorMessage = "Cannot load glfw";
         import bindbc.loader.sharedlib : errors;
+
         foreach (info; errors)
         {
             errorMessage ~= "\n  %s".format(info.message.to!string);

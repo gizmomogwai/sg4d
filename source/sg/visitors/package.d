@@ -1,6 +1,7 @@
 module sg.visitors;
 
-import sg.sg : Behavior, Visitor, NodeData, GroupData, SceneData, ProjectionGroupData, ObserverData, TransformationGroupData, ShapeGroupData, NodeData;
+import sg.sg : Behavior, Visitor, NodeData, GroupData, SceneData, ProjectionGroupData,
+    ObserverData, TransformationGroupData, ShapeGroupData, NodeData;
 
 version (Default)
 {

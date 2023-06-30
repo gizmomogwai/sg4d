@@ -15,8 +15,13 @@ import std.concurrency : Tid, thisTid;
 import std.exception : enforce;
 import std.string : toStringz, format;
 import std.typecons : BitFlags;
+version (DEBUG_DESTRUCTORS)
+{
+    import core.stdc.stdio;
+}
 
 alias CustomData = IntrusivePtr!CustomDataData;
+
 class CustomDataData
 {
     SharedControlBlock referenceCounter;
