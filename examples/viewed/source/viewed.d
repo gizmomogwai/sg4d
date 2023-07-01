@@ -516,12 +516,130 @@ void viewed(Args args)
             ScrollAreaContext fileInfo;
             ScrollAreaContext stats;
             Duration renderTime;
+            enum BORDER = 20;
             this()
             {
                 gui = new ImGui("~/.config/viewed/font.ttf".expandTilde);
             }
 
             alias visit = Visitor.visit;
+            void renderFileList(ref int xPos, ref int yPos, const int height)
+            {
+                if (showFileList)
+                {
+                    xPos += BORDER;
+                    const width = window.width / 3;
+                    gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
+                            files.array.length), xPos, yPos, width, height, () {
+
+                        xPos += width;
+                        foreach (file; files.array)
+                        {
+                            const active = file == files.front;
+                            if ((imageChangedByKey || firstImage) && active)
+                            {
+                                gui.revealNextElement(fileList);
+                                imageChangedByKey = false;
+                                firstImage = false;
+                            }
+                            // dfmt off
+                        const shortenedFilename = file
+                            .to!string
+                            .replace(args.directory !is null ? args.directory : "", "")
+                            .replace(args.album !is null? args.album.dirName : "", "")
+                            .replaceFirst(regex("^/"), "");
+                        // dfmt on
+                            const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                            if (gui.button(title, active ? Enabled.no : Enabled.yes))
+                            {
+                                files.select(file);
+                                state = state.updateAndStore(files, args);
+                                // dfmt off
+                            spawn(
+                                &loadNextImageSpawnable,
+                                vec2(window.width, window.height),
+                                files.front);
+                            // dfmt on
+                            }
+                        }
+                    }, true, 2000);
+                }
+            }
+
+            void renderStats(ref int xPos, ref int yPos, const int height)
+            {
+                if (showStats)
+                {
+                    xPos += BORDER;
+                    const width = window.width / 4;
+                    gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {
+                        xPos += width;
+                        gui.label("UI Rendertime:");
+                        gui.value(renderTime.total!("msecs")
+                            .to!string);
+                        gui.separatorLine();
+                    });
+                }
+            }
+
+            void renderFileInfo(ref int xPos, ref int yPos, const int height)
+            {
+                if (showFileInfo)
+                {
+                    xPos += BORDER;
+                    const width = max(0, window.width - BORDER - xPos);
+                    gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {
+                        xPos += width;
+                        auto active = files.front;
+                        gui.label("Filename:");
+                        gui.value(active);
+                        gui.separatorLine();
+                        gui.label("Filesize:");
+
+                        gui.value(active.size.formatBigNumber);
+                        gui.separatorLine();
+                        if (!currentImageDimension.x.isNaN)
+                        {
+                            gui.label("Dimension:");
+                            gui.value(currentImageDimension.to!string);
+                            gui.separatorLine();
+                            gui.label("Pixels:");
+                            gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                                .formatBigNumber);
+                            gui.separatorLine();
+                        }
+                        if (currentError.length)
+                        {
+                            gui.label("Error:");
+                            gui.value(currentError);
+                            gui.separatorLine();
+                        }
+                        gui.label("Load duration:");
+                        gui.value(currentLoadDuration.to!string);
+                        gui.separatorLine();
+                    });
+                }
+            }
+
+            void renderGui(ref int xPos, ref int yPos, ref int height)
+            {
+                if (showGui)
+                {
+                    int scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
+                        + Sizes.SLIDER_HEIGHT + Sizes.SCROLL_BAR_SIZE;
+                    gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
+                            window.height - BORDER - scrollHeight,
+                            window.width - 2 * BORDER, scrollHeight, () {
+                        float oldZoom = zoom;
+                        if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
+                        {
+                            zoomImage(window, currentImageDimension, oldZoom, zoom);
+                        }
+                    }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
+                    height -= scrollHeight + BORDER;
+                }
+            }
+
             override void visit(SceneData n)
             {
                 import std.datetime.stopwatch : StopWatch, AutoStart;
@@ -532,7 +650,6 @@ void viewed(Args args)
                 {
                     return;
                 }
-                enum BORDER = 20;
                 int xPos = 0;
                 int yPos = BORDER;
                 int height = window.height - 2 * BORDER;
@@ -541,107 +658,10 @@ void viewed(Args args)
                 gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                         cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
                         window.width, window.height, 0, () {
-                    if (showGui)
-                    {
-                        int scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
-                            + Sizes.SLIDER_HEIGHT + Sizes.SCROLL_BAR_SIZE;
-                        gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
-                            window.height - BORDER - scrollHeight,
-                            window.width - 2 * BORDER, scrollHeight, () {
-                            float oldZoom = zoom;
-                            if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
-                            {
-                                zoomImage(window, currentImageDimension, oldZoom, zoom);
-                            }
-                        }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
-                        height -= scrollHeight + BORDER;
-                    }
-                    if (showFileList)
-                    {
-                        xPos += BORDER;
-                        const width = window.width / 3;
-                        gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
-                            files.array.length), xPos, yPos, width, height, () {
-
-                            xPos += width;
-                            foreach (file; files.array)
-                            {
-                                const active = file == files.front;
-                                if ((imageChangedByKey || firstImage) && active)
-                                {
-                                    gui.revealNextElement(fileList);
-                                    imageChangedByKey = false;
-                                    firstImage = false;
-                                }
-                                // dfmt off
-                        const shortenedFilename = file
-                            .to!string
-                            .replace(args.directory !is null ? args.directory : "", "")
-                            .replace(args.album !is null? args.album.dirName : "", "")
-                            .replaceFirst(regex("^/"), "");
-                        // dfmt on
-                                const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
-                                if (gui.button(title, active ? Enabled.no : Enabled.yes))
-                                {
-                                    files.select(file);
-                                    state = state.updateAndStore(files, args);
-                                    // dfmt off
-                            spawn(
-                                &loadNextImageSpawnable,
-                                vec2(window.width, window.height),
-                                files.front);
-                            // dfmt on
-                                }
-                            }
-                        }, true, 2000);
-                    }
-                    if (showStats)
-                    {
-                        xPos += BORDER;
-                        const width = window.width / 4;
-                        gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {
-                            xPos += width;
-                            gui.label("UI Rendertime:");
-                            gui.value(renderTime.total!("msecs")
-                            .to!string);
-                            gui.separatorLine();
-                        });
-                    }
-                    if (showFileInfo)
-                    {
-                        xPos += BORDER;
-                        const width = max(0, window.width - BORDER - xPos);
-                        gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {
-                            xPos += width;
-                            auto active = files.front;
-                            gui.label("Filename:");
-                            gui.value(active);
-                            gui.separatorLine();
-                            gui.label("Filesize:");
-
-                            gui.value(active.size.formatBigNumber);
-                            gui.separatorLine();
-                            if (!currentImageDimension.x.isNaN)
-                            {
-                                gui.label("Dimension:");
-                                gui.value(currentImageDimension.to!string);
-                                gui.separatorLine();
-                                gui.label("Pixels:");
-                                gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
-                                .formatBigNumber);
-                                gui.separatorLine();
-                            }
-                            if (currentError.length)
-                            {
-                                gui.label("Error:");
-                                gui.value(currentError);
-                                gui.separatorLine();
-                            }
-                            gui.label("Load duration:");
-                            gui.value(currentLoadDuration.to!string);
-                            gui.separatorLine();
-                        });
-                    }
+                    renderGui(xPos, yPos, height);
+                    renderFileList(xPos, yPos, height);
+                    renderStats(xPos, yPos, height);
+                    renderFileInfo(xPos, yPos, height);
                 });
                 import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
                     GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
