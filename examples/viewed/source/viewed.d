@@ -23,7 +23,7 @@ import std.file : DirEntry, dirEntries, SpanMode, readText, write;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
-import std.range : chunks, take;
+import std.range : chunks, take, empty;
 import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
 import core.time : Duration;
@@ -112,14 +112,8 @@ class Files
         }
         else
         {
-            if (files.length == 0)
-            {
-                throw new Exception("No images");
-            }
-            else
-            {
-                currentIndex = files.length - 1;
-            }
+            enforce(!files.empty, "No images");
+            currentIndex = files.length + -1;
         }
     }
 
