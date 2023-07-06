@@ -625,7 +625,7 @@ void viewed(Args args)
             {
                 if (showGui)
                 {
-                    int scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
+                    const scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
                         + Sizes.SLIDER_HEIGHT + Sizes.SCROLL_BAR_SIZE;
                     gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
                             window.height - BORDER - scrollHeight,
@@ -644,7 +644,7 @@ void viewed(Args args)
             {
                 import std.datetime.stopwatch : StopWatch, AutoStart;
 
-                auto sw = StopWatch(AutoStart.yes);
+                const sw = StopWatch(AutoStart.yes);
                 if (showFileInfo == false && showFileList == false
                         && showStats == false && showGui == false)
                 {
@@ -658,7 +658,7 @@ void viewed(Args args)
                 gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                         cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
                         window.width, window.height, 0, () {
-                    renderGui(xPos, yPos, height);
+                              renderGui(xPos, yPos, height);
                     renderFileList(xPos, yPos, height);
                     renderStats(xPos, yPos, height);
                     renderFileInfo(xPos, yPos, height);
