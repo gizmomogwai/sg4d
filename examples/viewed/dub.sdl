@@ -5,6 +5,7 @@ copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
 dependency "argparse" version=">=0.0.0"
 dependency "sg4d" path="../.."
+dependency "deetween" version="~>0.0.1"
 dependency "mir-ion" version="~>2.1.8"
 targetType "executable"
 configuration "opengl2" {

@@ -27,6 +27,8 @@ import std.range : chunks, take, empty;
 import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
 import core.time : Duration;
+import std.datetime.stopwatch : StopWatch, AutoStart;
+import std.datetime.systime : SysTime, Clock;
 
 bool imageChangedByKey = false;
 bool firstImage = true;
@@ -305,7 +307,21 @@ auto readStatefile()
     {
         return new State();
     }
+}
 
+struct Visible
+{
+    bool current;
+    bool should;
+    bool needsRendering()
+    {
+        return current || should;
+    }
+
+    void animationDone()
+    {
+        current = should;
+    }
 }
 
 void viewed(Args args)
@@ -319,10 +335,6 @@ void viewed(Args args)
     writeln("single threaded ", benchmark, ": ", loadDuration);
     +/
     args.directory.expandTilde;
-    bool showFileList = false;
-    bool showFileInfo = false;
-    bool showStats = false;
-    bool showGui = false;
     vec2 currentImageDimension;
     long currentLoadDuration;
     string currentError;
@@ -336,6 +348,13 @@ void viewed(Args args)
     auto observer = Observer.make("observer", projection);
     observer.get.setPosition(vec3(0, 0, 100));
     scene.get.addChild(observer);
+    import imgui : ScrollAreaContext;
+
+    ScrollAreaContext viewedGui;
+    ScrollAreaContext fileList;
+    ScrollAreaContext fileInfo;
+    ScrollAreaContext stats;
+
     auto clamp(float v, float minimum, float maximum)
     {
         return min(max(v, minimum), maximum);
@@ -457,22 +476,22 @@ void viewed(Args args)
         // gui
         if ((key == 'F') && (action == GLFW_RELEASE))
         {
-            showFileList = !showFileList;
+            fileList.toggle;
             return;
         }
         if ((key == 'I') && (action == GLFW_RELEASE))
         {
-            showFileInfo = !showFileInfo;
+            fileInfo.toggle;
             return;
         }
         if ((key == GLFW_KEY_COMMA) && (action == GLFW_RELEASE))
         {
-            showStats = !showStats;
+            stats.toggle;
             return;
         }
         if ((key == 'G') && (action == GLFW_RELEASE))
         {
-            showGui = !showGui;
+            viewedGui.toggle;
             return;
         }
 
@@ -502,13 +521,9 @@ void viewed(Args args)
     {
         class ImguiVisitor : Visitor
         {
-            import imgui : ImGui, ScrollAreaContext, MouseInfo, Enabled, Sizes;
+            import imgui : ImGui, MouseInfo, Enabled, Sizes;
 
             ImGui gui;
-            ScrollAreaContext viewedGui;
-            ScrollAreaContext fileList;
-            ScrollAreaContext fileInfo;
-            ScrollAreaContext stats;
             Duration renderTime;
             enum BORDER = 20;
             this()
@@ -519,7 +534,7 @@ void viewed(Args args)
             alias visit = Visitor.visit;
             void renderFileList(ref int xPos, ref int yPos, const int height)
             {
-                if (showFileList)
+                if (fileList.isVisible)
                 {
                     xPos += BORDER;
                     const width = window.width / 3;
@@ -562,7 +577,7 @@ void viewed(Args args)
 
             void renderStats(ref int xPos, ref int yPos, const int height)
             {
-                if (showStats)
+                if (stats.isVisible)
                 {
                     xPos += BORDER;
                     const width = window.width / 4;
@@ -578,7 +593,7 @@ void viewed(Args args)
 
             void renderFileInfo(ref int xPos, ref int yPos, const int height)
             {
-                if (showFileInfo)
+                if (fileInfo.isVisible)
                 {
                     xPos += BORDER;
                     const width = max(0, window.width - BORDER - xPos);
@@ -617,10 +632,14 @@ void viewed(Args args)
 
             void renderGui(ref int xPos, ref int yPos, ref int height)
             {
-                if (showGui)
+                if (viewedGui.isVisible)
                 {
-                    const scrollHeight = Sizes.SCROLL_AREA_HEADER + Sizes.SCROLL_AREA_PADDING
-                        + Sizes.SLIDER_HEIGHT + Sizes.SCROLL_BAR_SIZE;
+                    // dfmt off
+                    const scrollHeight = Sizes.SCROLL_AREA_HEADER
+                        + Sizes.SCROLL_AREA_PADDING
+                        + Sizes.SLIDER_HEIGHT
+                        + Sizes.SCROLL_BAR_SIZE;
+                    // dfmt on
                     gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
                             window.height - BORDER - scrollHeight,
                             window.width - 2 * BORDER, scrollHeight, () {
@@ -636,14 +655,7 @@ void viewed(Args args)
 
             override void visit(SceneData n)
             {
-                import std.datetime.stopwatch : StopWatch, AutoStart;
-
                 const sw = StopWatch(AutoStart.yes);
-                if (showFileInfo == false && showFileList == false
-                        && showStats == false && showGui == false)
-                {
-                    return;
-                }
                 int xPos = 0;
                 int yPos = BORDER;
                 int height = window.height - 2 * BORDER;
@@ -652,7 +664,14 @@ void viewed(Args args)
                 gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                         cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
                         window.width, window.height, 0, () {
-                              renderGui(xPos, yPos, height);
+
+                    auto t = Clock.currTime;
+                    viewedGui.animate(t);
+                    fileList.animate(t);
+                    fileInfo.animate(t);
+                    stats.animate(t);
+
+                    renderGui(xPos, yPos, height);
                     renderFileList(xPos, yPos, height);
                     renderStats(xPos, yPos, height);
                     renderFileInfo(xPos, yPos, height);
@@ -664,7 +683,6 @@ void viewed(Args args)
                 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
                 glDisable(GL_DEPTH_TEST);
                 gui.render();
-
                 renderTime = sw.peek;
             }
         }

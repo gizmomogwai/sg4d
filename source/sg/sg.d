@@ -21,7 +21,7 @@ version (DEBUG_DESTRUCTORS)
 }
 
 alias CustomData = IntrusivePtr!CustomDataData;
-
+ 
 class CustomDataData
 {
     SharedControlBlock referenceCounter;
@@ -406,7 +406,7 @@ class VertexData : NodeData
     {
         super(name);
 
-        init(components, size);
+        initialize(components, size);
         data = new float[tupleSize * size];
     }
 
@@ -414,7 +414,7 @@ class VertexData : NodeData
     {
         super(name);
 
-        init(components, size);
+        initialize(components, size);
         enforce(data.length == (tupleSize * size),
                 "Expected %s float, but got %s floats".format(tupleSize * size, data.length));
         this.data = data;
@@ -428,7 +428,7 @@ class VertexData : NodeData
         }
     }
 
-    private void init(Components components, uint size)
+    private void initialize(Components components, uint)
     {
         this.components = components;
         uint offset = 0;
@@ -888,7 +888,7 @@ class Behavior : GroupData
 
 class Visitor
 {
-    void visit(NodeData n)
+    void visit(NodeData)
     {
     }
 

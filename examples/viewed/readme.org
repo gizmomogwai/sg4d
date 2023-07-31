@@ -3,13 +3,16 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
-** DONE reveal in filelist which image is showing
-CLOSED: [2023-05-31 Wed 00:46]
-- CLOSING NOTE [2023-05-31 Wed 00:46]
-at the moment the system gets crazy sometimes ..
-* TODO get rid of size limited draw commands in an idiomatic d way .. would be very simple with java arraylist
-
+** TODO profile rendering
 * Done Ideas
+** DONE clip when creating the gfxcommands
+** DONE make big lists faster (e.g. all 2023 images)
+CLOSED: [2023-06-06 Tue 01:23]
+- CLOSING NOTE [2023-06-06 Tue 01:23] \\
+  clipping done in rendering atm
+  wip for clipping when creating the gfxcommandqueue
+** DONE reveal in filelist which image is showing
+** DONE get rid of size limited draw commands in an idiomatic d way .. would be very simple with java arraylist
 ** DONE loading while rendering is slower than single threaded loading!
 CLOSED: [2023-05-18 Thu 21:55]
 - CLOSING NOTE [2023-05-18 Thu 21:55]
@@ -32,3 +35,6 @@ CLOSED: [2023-05-16 Tue 23:29]
 CLOSED: [2023-05-17 Wed 22:38]
 - CLOSING NOTE [2023-05-17 Wed 22:38] \\
   glfw does not support it (2023-05-17)
+
+bash -c 'cd ~/Sync/projects/sg4d/examples/viewed && source ~/dlang/ldc-1.32.2/activate && dub run dfmt -- -i . && dub build --config=openlg33 --config=release && dub run dscanner -- --styleCheck . || true && env DYLD_LIBRARY_PATH=/opt/homebrew/Cellar/glfw/3.3.8/lib dub run --config=opengl33 --build=release -- --directory=~/Pictures/CopyOfImageLib'
+bash -c 'cd ~/Sync/projects/sg4d/examples/viewed && source ~/dlang/ldc-1.32.2/activate && dub run dfmt -- -i . && dub build --config=openlg33 --config=release && dub run dscanner -- --styleCheck . || true && env DYLD_LIBRARY_PATH=/opt/homebrew/Cellar/glfw/3.3.8/lib dub run --config=opengl33 --build=release -- --directory=~/tmp/tttx'
