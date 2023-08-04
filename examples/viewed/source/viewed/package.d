@@ -1,6 +1,5 @@
 module viewed;
 
-import argparse : NamedArgument, CLI;
 import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, GLFW_KEY_COMMA,
     GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
 import btl.vector : Vector;
@@ -13,13 +12,13 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
     ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, joiner, countUntil, sort, reverse;
-import std.array : array, join, replace;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter;
+import std.array : array, join, replace, split;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
 import std.datetime.stopwatch;
 import std.exception : enforce;
-import std.file : DirEntry, dirEntries, SpanMode, readText, write;
+import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
@@ -29,6 +28,12 @@ import std.stdio : writeln;
 import core.time : Duration;
 import std.datetime.stopwatch : StopWatch, AutoStart;
 import std.datetime.systime : SysTime, Clock;
+import args : Args;
+
+version (unittest)
+{
+    import unit_threaded : should;
+}
 
 bool imageChangedByKey = false;
 bool firstImage = true;
@@ -46,15 +51,6 @@ string formatBigNumber(T)(const T number)
     return buffer[];
 }
 
-static struct Args
-{
-    @NamedArgument("directory", "dir", "d")
-    string directory;
-
-    @NamedArgument("album", "a")
-    string album;
-}
-
 auto getProjection(float zoom)
 {
     return new ParallelProjection(1, 1000, zoom);
@@ -63,12 +59,19 @@ auto getProjection(float zoom)
 class Files
 {
     DirEntry[] files;
+    string[][] fileTags;
     size_t currentIndex;
+    private string[] tags;
+
     this(string directory)
     {
         files = directory.expandTilde.dirEntries("{*.jpg,*.png}", SpanMode.depth).array.sort.array;
         (files.length > 0).enforce("no jpg files found");
         currentIndex = 0;
+        foreach (file; files)
+        {
+            fileTags ~= loadTags(file);
+        }
     }
 
     this(string[] directories)
@@ -80,6 +83,7 @@ class Files
     void select(DirEntry file)
     {
         currentIndex = files.countUntil(file);
+        tags = null;
     }
 
     bool empty()
@@ -99,6 +103,7 @@ class Files
         {
             currentIndex = 0;
         }
+        tags = null;
     }
 
     auto back()
@@ -117,6 +122,7 @@ class Files
             enforce(!files.empty, "No images");
             currentIndex = files.length + -1;
         }
+        tags = null;
     }
 
     auto array()
@@ -131,7 +137,40 @@ class Files
         {
             currentIndex = h;
         }
+        tags = null;
     }
+
+    string[] getTags()
+    {
+        return fileTags[currentIndex];
+    }
+    private auto loadTags(DirEntry e)
+    {
+        auto propertiesFile = e.name ~ ".properties";
+        if (propertiesFile.exists)
+        {
+            return propertiesFile.readText.idup.loadJavaProperties;
+        }
+        return null;
+    }
+}
+
+string[] loadJavaProperties(string content)
+{
+    return content
+        .split("\n")
+        .map!(line => line.split("="))
+        .filter!(keyValue => keyValue.length == 2 && keyValue[1] == "true")
+        .map!(keyValue => keyValue[0])
+        .array
+        ;
+}
+
+@("load java properties") unittest
+{
+    "iotd=true\n".loadJavaProperties.should == ["iotd"];
+    "iotd=true\niotd2=true\n".loadJavaProperties.should == ["iotd", "iotd2"];
+    "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
 }
 
 auto createTile(string filename, Image* i)
@@ -244,8 +283,6 @@ void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
     loadNextImage(ownerTid, windowSize, nextFile);
 }
 
-mixin CLI!Args.main!((args) { viewed(args); });
-
 // maps from album://string to filename
 // or from directory://string to filename
 static class State
@@ -275,6 +312,11 @@ static class State
 
 auto getFiles(ref Args args)
 {
+    const sw = StopWatch(AutoStart.yes);
+    scope (exit)
+    {
+        writeln("getFiles took: %s".format(sw.peek));
+    }
     if (args.album.length > 0)
     {
         args.album = args.album.expandTilde;
@@ -324,7 +366,7 @@ struct Visible
     }
 }
 
-void viewed(Args args)
+public void viewedMain(Args args)
 {
     /+
     auto sw = StopWatch(AutoStart.yes);
@@ -625,6 +667,12 @@ void viewed(Args args)
                         }
                         gui.label("Load duration:");
                         gui.value(currentLoadDuration.to!string);
+                        gui.separatorLine();
+                        gui.label("Tags");
+                        foreach (tag; files.getTags)
+                        {
+                            gui.value(tag);
+                        }
                         gui.separatorLine();
                     });
                 }
