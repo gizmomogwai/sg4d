@@ -4,7 +4,7 @@ import bindbc.glfw : loadGLFW, GLFWwindow, glfwSupport,
     glfwInit, glfwWindowHint, glfwCreateWindow, glfwSetWindowUserPointer,
     GLFW_CONTEXT_VERSION_MAJOR, GLFW_CONTEXT_VERSION_MINOR,
     GLFW_OPENGL_FORWARD_COMPAT,
-    GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE, glfwSetKeyCallback,
+    GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE, glfwSetKeyCallback, glfwSetCharCallback,
     glfwSetFramebufferSizeCallback, glfwSetWindowSize, glfwSetWindowPos,
     glfwSetScrollCallback, glfwSwapInterval, glfwGetFramebufferSize,
     glfwMakeContextCurrent,
@@ -64,7 +64,7 @@ class Window
     GLFWwindow* window;
     int width;
     int height;
-
+    dchar unicode;
     struct ScrollInfo
     {
         double xOffset;
@@ -79,12 +79,15 @@ class Window
     ScrollInfo scroll;
     alias KeyCallback = void delegate(Window w, int key, int scancode, int action, int mods);
     KeyCallback keyCallback;
-    this(Scene scene, int width, int height, KeyCallback keyCallback)
+    alias CharCallback = void delegate(Window w, uint unicode);
+    CharCallback charCallback;
+    this(Scene scene, int width, int height, KeyCallback keyCallback, CharCallback charCallback)
     {
         this.scene = scene;
         scroll.reset;
         scene.get.setRenderThread(thisTid);
         this.keyCallback = keyCallback;
+        this.charCallback = charCallback;
         loadBindBCGlfw();
         glfwInit();
         version (GL_33)
@@ -97,6 +100,7 @@ class Window
         window = glfwCreateWindow(width, height, "test", null, null);
         window.glfwSetWindowUserPointer(cast(void*) this);
         window.glfwSetKeyCallback(&staticKeyCallback);
+        window.glfwSetCharCallback(&staticCharCallback);
         window.glfwSetFramebufferSizeCallback(&staticSizeCallback);
         window.glfwSetWindowSize(width, height);
         window.glfwSetScrollCallback(&staticScrollCallback);
@@ -200,6 +204,19 @@ extern (C)
         {
             auto w = cast(Window) window.glfwGetWindowUserPointer();
             w.keyCallback(w, key, scancode, action, mods);
+        }
+        catch (Throwable t)
+        {
+            assert(0);
+        }
+    }
+
+    void staticCharCallback(GLFWwindow* window, uint unicode) nothrow
+    {
+        try
+        {
+            auto w = cast(Window) window.glfwGetWindowUserPointer();
+            w.charCallback(w, unicode);
         }
         catch (Throwable t)
         {

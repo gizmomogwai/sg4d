@@ -1,7 +1,8 @@
 module viewed;
 
-import bindbc.glfw : GLFW_RELEASE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, GLFW_KEY_COMMA,
-    GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers, glfwPollEvents;
+import bindbc.glfw : GLFW_RELEASE, GLFW_PRESS, GLFW_KEY_ENTER, GLFW_KEY_BACKSPACE, GLFW_KEY_RIGHT_BRACKET,
+    GLFW_KEY_SLASH, GLFW_KEY_COMMA, GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers,
+    glfwPollEvents;
 import btl.vector : Vector;
 import gamut : Image;
 import gl3n.linalg : vec2, vec3;
@@ -440,113 +441,12 @@ public void viewedMain(Args args)
         adjustAndSetPosition(newPosition, imageDimension, zoom, w);
     }
 
-    void doZoom(Window w, int input, int key, float newZoom, int action, vec2 imageDimension)
-    {
-        if ((input == key) && (action == GLFW_RELEASE))
-        {
-            zoomImage(w, imageDimension, zoom, newZoom);
-        }
-    }
-
     void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
     {
         auto position = observer.get.getPosition.xy + vec2(dx, dy);
         adjustAndSetPosition(position, imageDimension, zoom, w);
     }
 
-    auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/ , int action, int /+mods+/ ) {
-        // movement
-        if (key == 'W')
-        {
-            move(0, 10, w, currentImageDimension, zoom);
-            return;
-        }
-        if (key == 'A')
-        {
-            move(-10, 0, w, currentImageDimension, zoom);
-            return;
-        }
-        if (key == 'S')
-        {
-            move(0, -10, w, currentImageDimension, zoom);
-            return;
-        }
-        if (key == 'D')
-        {
-            move(10, 0, w, currentImageDimension, zoom);
-            return;
-        }
-        if (key == GLFW_KEY_RIGHT_BRACKET)
-        {
-            zoomImage(w, currentImageDimension, zoom, zoom + zoomDelta);
-            return;
-        }
-        if (key == GLFW_KEY_SLASH)
-        {
-            zoomImage(w, currentImageDimension, zoom, zoom - zoomDelta);
-            return;
-        }
-        doZoom(w, key, '1', 1.0 / 16, action, currentImageDimension);
-        doZoom(w, key, '2', 1.0 / 8, action, currentImageDimension);
-        doZoom(w, key, '3', 1.0 / 4, action, currentImageDimension);
-        doZoom(w, key, '4', 1.0 / 3, action, currentImageDimension);
-        doZoom(w, key, '5', 1.0, action, currentImageDimension);
-        doZoom(w, key, '6', 1.0 * 2, action, currentImageDimension);
-        doZoom(w, key, '7', 1.0 * 3, action, currentImageDimension);
-        doZoom(w, key, '8', 1.0 * 4, action, currentImageDimension);
-        doZoom(w, key, '9', 1.0 * 5, action, currentImageDimension);
-        doZoom(w, key, '0', 1.0 * 6, action, currentImageDimension);
-
-        // image navigation
-        if (((key == 'B') || (key == GLFW_KEY_LEFT)) && (action == GLFW_RELEASE))
-        {
-            files.popBack;
-            state = state.updateAndStore(files, args);
-            (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
-            imageChangedByKey = true;
-            return;
-        }
-        if (((key == 'N') || (key == ' ') || (key == GLFW_KEY_RIGHT)) && (action == GLFW_RELEASE))
-        {
-            files.popFront;
-            state = state.updateAndStore(files, args);
-            (&loadNextImageSpawnable).spawn(vec2(w.width, w.height), files.front);
-            imageChangedByKey = true;
-            return;
-        }
-
-        // gui
-        if ((key == 'F') && (action == GLFW_RELEASE))
-        {
-            fileList.toggle;
-            return;
-        }
-        if ((key == 'I') && (action == GLFW_RELEASE))
-        {
-            fileInfo.toggle;
-            return;
-        }
-        if ((key == GLFW_KEY_COMMA) && (action == GLFW_RELEASE))
-        {
-            stats.toggle;
-            return;
-        }
-        if ((key == 'G') && (action == GLFW_RELEASE))
-        {
-            viewedGui.toggle;
-            return;
-        }
-
-        // debug
-        if ((key == 'P') && (action == GLFW_RELEASE))
-        {
-            scene.get.accept(new PrintVisitor());
-            return;
-        }
-
-    });
-
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front);
 
     version (Default)
     {
@@ -554,6 +454,9 @@ public void viewedMain(Args args)
         class ImguiVisitor : Visitor
         {
             alias visit = Visitor.visit;
+            this(Window w)
+            {
+            }
             override void visit(SceneData n)
             {
             }
@@ -565,14 +468,17 @@ public void viewedMain(Args args)
         {
             import imgui : ImGui, MouseInfo, Enabled, Sizes;
 
+            Window window;
             ImGui gui;
             Duration renderTime;
             enum BORDER = 20;
-            this()
+            string newTag;
+
+            this(Window window)
             {
+                this.window = window;
                 gui = new ImGui("~/.config/viewed/font.ttf".expandTilde);
             }
-
             alias visit = Visitor.visit;
             void renderFileList(ref int xPos, ref int yPos, const int height)
             {
@@ -673,11 +579,14 @@ public void viewedMain(Args args)
                         {
                             gui.value(tag);
                         }
+                        if (gui.textInput("New tag", newTag))
+                        {
+                            writeln("Add new tag " ~ newTag);
+                        }
                         gui.separatorLine();
                     });
                 }
             }
-
             void renderGui(ref int xPos, ref int yPos, ref int height)
             {
                 if (viewedGui.isVisible)
@@ -711,7 +620,7 @@ public void viewedMain(Args args)
                 auto scrollInfo = window.getAndResetScrollInfo();
                 gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                         cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
-                        window.width, window.height, 0, () {
+                        window.width, window.height, window.unicode, () {
 
                     auto t = Clock.currTime;
                     viewedGui.animate(t);
@@ -723,6 +632,45 @@ public void viewedMain(Args args)
                     renderFileList(xPos, yPos, height);
                     renderStats(xPos, yPos, height);
                     renderFileInfo(xPos, yPos, height);
+
+                    //movement
+                    gui.hotKey('w', () { move(0, 10, window, currentImageDimension, zoom); });
+                    gui.hotKey('a', () { move(-10, 0, window, currentImageDimension, zoom); });
+                    gui.hotKey('s', () { move(0, -10, window, currentImageDimension, zoom); });
+                    gui.hotKey('d', () { move(10, 0, window, currentImageDimension, zoom); });
+                    gui.hotKey('+', () { zoomImage(window, currentImageDimension, zoom, zoom + zoomDelta); });
+                    gui.hotKey('-', () { zoomImage(window, currentImageDimension, zoom, zoom - zoomDelta); });
+                    gui.hotKey('1', () { zoomImage(window, currentImageDimension, zoom, 1.0 / 16); });
+                    gui.hotKey('2', () { zoomImage(window, currentImageDimension, zoom, 1.0 / 8); });
+                    gui.hotKey('3', () { zoomImage(window, currentImageDimension, zoom, 1.0 / 4); });
+                    gui.hotKey('4', () { zoomImage(window, currentImageDimension, zoom, 1.0 / 3); });
+                    gui.hotKey('5', () { zoomImage(window, currentImageDimension, zoom, 1.0 ); });
+                    gui.hotKey('6', () { zoomImage(window, currentImageDimension, zoom, 1.0 *2); });
+                    gui.hotKey('7', () { zoomImage(window, currentImageDimension, zoom, 1.0 *3); });
+                    gui.hotKey('8', () { zoomImage(window, currentImageDimension, zoom, 1.0 *4); });
+                    gui.hotKey('9', () { zoomImage(window, currentImageDimension, zoom, 1.0 *5); });
+                    gui.hotKey('0', () { zoomImage(window, currentImageDimension, zoom, 1.0 *6); });
+
+                    // image navigation
+                    gui.hotKey(['b', 263], () {
+                            files.popBack;
+                            state = state.updateAndStore(files, args);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
+                            imageChangedByKey = true;
+                        });
+                    gui.hotKey(['n', ' ', 262], () {
+                            files.popFront;
+                            state = state.updateAndStore(files, args);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
+                            imageChangedByKey = true;
+                        });
+                    // gui hotkeys
+                    gui.hotKey('f', () { fileList.toggle(); });
+                    gui.hotKey('i', () { fileInfo.toggle(); });
+                    gui.hotKey(',', () { stats.toggle(); });
+                    gui.hotKey('g', () { viewedGui.toggle(); });
+                    // debug hotkey
+                    gui.hotKey('p', () { scene.get.accept(new PrintVisitor()); });
                 });
                 import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
                     GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
@@ -736,12 +684,39 @@ public void viewedMain(Args args)
         }
     }
 
-    // dfmt off
+    auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/ , int action, int /+mods+/ ) {
+            writeln(key);
+        if (action != GLFW_PRESS)
+        {
+            return;
+        }
+        switch (key)
+        {
+        case GLFW_KEY_ENTER:
+            w.unicode = 0x0d;
+            break;
+        case GLFW_KEY_BACKSPACE:
+            w.unicode = 0x08;
+            break;
+        case GLFW_KEY_RIGHT:
+            w.unicode = 262;
+            break;
+        case GLFW_KEY_LEFT:
+            w.unicode = 263;
+            break;
+        default:
+            break;
+        }
+        },(Window w, uint code) { w.unicode = code; });
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+
     Visitor renderVisitor = new RenderVisitor(window);
+    Visitor imguiVisitor = new ImguiVisitor(window);
+    // dfmt off
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),
-        new ImguiVisitor(),
+        imguiVisitor,
     ];
     // dfmt on
 
