@@ -13,7 +13,7 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
     ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find;
 import std.array : array, join, replace, split;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -57,34 +57,56 @@ auto getProjection(float zoom)
     return new ParallelProjection(1, 1000, zoom);
 }
 
+class ImageFile {
+    DirEntry file;
+    string[] tags;
+    this(DirEntry file)
+    {
+        this.file = file;
+        this.tags = file.loadTags();
+    }
+    void addTag(string tag)
+    {
+        if (tags.find(tag).empty)
+        {
+            tags ~= tag;
+            tags.sort;
+            file.storeTags(tags);
+        }
+    }
+}
 class Files
 {
-    DirEntry[] files;
-    string[][] fileTags;
+    ImageFile[] files;
     size_t currentIndex;
-    private string[] tags;
-
+    enum IMAGE_PATTERN = "{*.jpg,*.png}";
     this(string directory)
     {
-        files = directory.expandTilde.dirEntries("{*.jpg,*.png}", SpanMode.depth).array.sort.array;
-        (files.length > 0).enforce("no jpg files found");
+        files = directory.expandTilde.dirEntries(IMAGE_PATTERN, SpanMode.depth).array.sort.map!(dirEntry => new ImageFile(dirEntry)).array;
+        init();
+    }
+    private void init() {
+        (files.length > 0).enforce("no images found");
         currentIndex = 0;
-        foreach (file; files)
-        {
-            fileTags ~= loadTags(file);
-        }
     }
 
     this(string[] directories)
     {
-        files = directories.map!(dir => dir.expandTilde.dirEntries("*.jpg",
-                SpanMode.depth).array.sort).joiner.array;
+        // dfmt off
+        files = directories.map!(
+            dir => dir
+              .expandTilde
+              .dirEntries(IMAGE_PATTERN, SpanMode.depth)
+              .array
+            .sort.map!(dirEntry => new ImageFile(dirEntry)))
+          .joiner
+          .array;
+        init();
     }
 
-    void select(DirEntry file)
+    void select(ImageFile file)
     {
         currentIndex = files.countUntil(file);
-        tags = null;
     }
 
     bool empty()
@@ -104,7 +126,6 @@ class Files
         {
             currentIndex = 0;
         }
-        tags = null;
     }
 
     auto back()
@@ -123,7 +144,6 @@ class Files
             enforce(!files.empty, "No images");
             currentIndex = files.length + -1;
         }
-        tags = null;
     }
 
     auto array()
@@ -133,29 +153,34 @@ class Files
 
     void jumpTo(in string s)
     {
-        const h = files.countUntil!(v => v.to!string == s);
+        const h = files.countUntil!(v => v.file.to!string == s);
         if (h != -1)
         {
             currentIndex = h;
         }
-        tags = null;
     }
 
     string[] getTags()
     {
-        return fileTags[currentIndex];
-    }
-    private auto loadTags(DirEntry e)
-    {
-        auto propertiesFile = e.name ~ ".properties";
-        if (propertiesFile.exists)
-        {
-            return propertiesFile.readText.idup.loadJavaProperties;
-        }
-        return null;
+        return files[currentIndex].tags;
     }
 }
 
+auto loadTags(DirEntry e)
+{
+    auto propertiesFile = e.name ~ ".properties";
+    if (propertiesFile.exists)
+    {
+        return propertiesFile.readText.idup.loadJavaProperties;
+    }
+    return null;
+}
+
+auto storeTags(DirEntry e, string[] tags)
+{
+    auto propertiesFile = e.name ~ ".properties";
+    propertiesFile.write(tags.toJavaProperties());
+}
 string[] loadJavaProperties(string content)
 {
     return content
@@ -172,6 +197,15 @@ string[] loadJavaProperties(string content)
     "iotd=true\n".loadJavaProperties.should == ["iotd"];
     "iotd=true\niotd2=true\n".loadJavaProperties.should == ["iotd", "iotd2"];
     "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
+}
+
+string toJavaProperties(string[] tags)
+{
+    return tags.map!(t => "%s=true".format(t)).joiner("\n").to!string ~"\n";
+}
+@("convert to java properties") unittest
+{
+    ["a", "b", "c"].toJavaProperties.should == "a=true\nb=true\nc=true\n";
 }
 
 auto createTile(string filename, Image* i)
@@ -219,22 +253,22 @@ class LoadException : Exception
     }
 }
 
-void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
+void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile)
 {
     try
     {
         const sw = StopWatch(AutoStart.yes);
 
         Image* image = new Image;
-        image.loadFromFile(nextFile.name);
+        image.loadFromFile(nextFile.file.name);
         auto loadDuration = sw.peek.total!("msecs");
         // dfmt off
         writeln("Image %s load%sin %sms".format(
-                    nextFile.name,
+                    nextFile.file.name,
                     image.isValid ? "ed sucessfully " : "ing failed ",
                     loadDuration));
         // dfmt on
-        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.name,
+        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.file.name,
                 image.errorMessage), image.errorMessage.to!string, loadDuration));
         if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width * 4))
         {
@@ -252,7 +286,7 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
                 zoom = min(windowSize.x.to!float / currentImageDimension.x,
                     windowSize.y.to!float / currentImageDimension.y);
                 o.setProjection(zoom.getProjection);
-                Node newNode = createTile(nextFile.name, image);
+                Node newNode = createTile(nextFile.file.name, image);
                 if (o.childs.length > 0)
                 {
                     o.replaceChild(0, newNode);
@@ -279,9 +313,9 @@ void loadNextImage(Tid tid, vec2 windowSize, DirEntry nextFile)
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, DirEntry nextFile)
+void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile)
 {
-    loadNextImage(ownerTid, windowSize, nextFile);
+    loadNextImage(ownerTid, windowSize, cast()nextFile);
 }
 
 // maps from album://string to filename
@@ -296,7 +330,7 @@ static class State
 
     auto updateAndStore(Files files, Args args)
     {
-        indices[key(args)] = files.front;
+        indices[key(args)] = files.front.file;
         stateFile.write(serializeJson(this));
         return this;
     }
@@ -500,23 +534,24 @@ public void viewedMain(Args args)
                                 firstImage = false;
                             }
                             // dfmt off
-                        const shortenedFilename = file
-                            .to!string
-                            .replace(args.directory !is null ? args.directory : "", "")
-                            .replace(args.album !is null? args.album.dirName : "", "")
-                            .replaceFirst(regex("^/"), "");
-                        // dfmt on
+                            const shortenedFilename = file.file
+                                .to!string
+                                .replace(args.directory !is null ? args.directory : "", "")
+                                .replace(args.album !is null? args.album.dirName : "", "")
+                                .replaceFirst(regex("^/"), "");
+                            // dfmt on
                             const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
                             if (gui.button(title, active ? Enabled.no : Enabled.yes))
                             {
                                 files.select(file);
                                 state = state.updateAndStore(files, args);
                                 // dfmt off
-                            spawn(
-                                &loadNextImageSpawnable,
-                                vec2(window.width, window.height),
-                                files.front);
-                            // dfmt on
+                                auto currentImage = files.front;
+                                spawn(
+                                    &loadNextImageSpawnable,
+                                    vec2(window.width, window.height),
+                                    cast(shared)currentImage);
+                                // dfmt on
                             }
                         }
                     }, true, 2000);
@@ -547,13 +582,14 @@ public void viewedMain(Args args)
                     const width = max(0, window.width - BORDER - xPos);
                     gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {
                         xPos += width;
-                        auto active = files.front;
+                        auto imageFile = files.front;
+                        auto imageDirEntry = imageFile.file;
                         gui.label("Filename:");
-                        gui.value(active);
+                        gui.value(imageDirEntry);
                         gui.separatorLine();
                         gui.label("Filesize:");
 
-                        gui.value(active.size.formatBigNumber);
+                        gui.value(imageDirEntry.size.formatBigNumber);
                         gui.separatorLine();
                         if (!currentImageDimension.x.isNaN)
                         {
@@ -575,13 +611,13 @@ public void viewedMain(Args args)
                         gui.value(currentLoadDuration.to!string);
                         gui.separatorLine();
                         gui.label("Tags");
-                        foreach (tag; files.getTags)
+                        foreach (tag; imageFile.tags)
                         {
                             gui.value(tag);
                         }
                         if (gui.textInput("New tag", newTag))
                         {
-                            writeln("Add new tag " ~ newTag);
+                            imageFile.addTag(newTag);
                         }
                         gui.separatorLine();
                     });
@@ -655,13 +691,13 @@ public void viewedMain(Args args)
                     gui.hotKey(['b', 263], () {
                             files.popBack;
                             state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), cast(shared)files.front);
                             imageChangedByKey = true;
                         });
                     gui.hotKey(['n', ' ', 262], () {
                             files.popFront;
                             state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), files.front);
+                            (&loadNextImageSpawnable).spawn(vec2(window.width, window.height), cast(shared)files.front);
                             imageChangedByKey = true;
                         });
                     // gui hotkeys
