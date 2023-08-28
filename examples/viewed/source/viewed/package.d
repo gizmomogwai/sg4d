@@ -2,7 +2,7 @@ module viewed;
 
 import bindbc.glfw : GLFW_RELEASE, GLFW_PRESS, GLFW_KEY_ENTER, GLFW_KEY_BACKSPACE, GLFW_KEY_RIGHT_BRACKET,
     GLFW_KEY_SLASH, GLFW_KEY_COMMA, GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers,
-    glfwPollEvents;
+    glfwPollEvents, GLFW_KEY_ESCAPE;
 import btl.vector : Vector;
 import gamut : Image;
 import gl3n.linalg : vec2, vec3;
@@ -739,6 +739,9 @@ public void viewedMain(Args args)
             break;
         case GLFW_KEY_LEFT:
             w.unicode = 263;
+            break;
+        case GLFW_KEY_ESCAPE:
+            w.unicode = 0x27;
             break;
         default:
             break;
