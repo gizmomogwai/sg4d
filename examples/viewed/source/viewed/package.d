@@ -14,7 +14,7 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
     ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp;
 import std.array : array, join, replace, split;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout;
 import std.conv : to;
@@ -37,7 +37,7 @@ version (unittest)
     import unit_threaded : should;
 }
 
-bool imageChangedByKey = false;
+bool imageChangedExternally = false;
 bool firstImage = true;
 
 string formatBigNumber(T)(const T number)
@@ -81,13 +81,17 @@ class ImageFile
 
 class Files
 {
-    ImageFile[] files;
+    public ImageFile[] files;
+    private string filter;
+    public bool filterState;
+    public ImageFile[] filteredFiles;
     size_t currentIndex;
     enum IMAGE_PATTERN = "{*.jpg,*.png}";
     this(string directory)
     {
         files = directory.expandTilde.dirEntries(IMAGE_PATTERN, SpanMode.depth)
             .array.sort.map!(dirEntry => new ImageFile(dirEntry)).array;
+        runFilter();
         init();
     }
 
@@ -108,28 +112,49 @@ class Files
             .sort.map!(dirEntry => new ImageFile(dirEntry)))
           .joiner
           .array;
+        runFilter();
         init();
+    }
+
+    void runFilter()
+    {
+        if (filter.empty)
+        {
+            filteredFiles = files;
+            filterState = true;
+        }
+        else
+        {
+            filteredFiles = files.filter!(f => !f.tags.find(filter).empty).array;
+            if (filteredFiles.empty)
+            {
+                filteredFiles = files;
+                filterState = false;
+            } else {
+                filterState = true;
+            }
+        }
     }
 
     void select(ImageFile file)
     {
-        currentIndex = files.countUntil(file);
+        currentIndex = filteredFiles.countUntil(file);
     }
 
     bool empty()
     {
-        return files.length == 0;
+        return filteredFiles.length == 0;
     }
 
     auto front()
     {
-        return files[currentIndex];
+        return filteredFiles[currentIndex];
     }
 
     void popFront()
     {
         currentIndex++;
-        if (currentIndex == files.length)
+        if (currentIndex == filteredFiles.length)
         {
             currentIndex = 0;
         }
@@ -137,7 +162,7 @@ class Files
 
     auto back()
     {
-        return files[currentIndex];
+        return filteredFiles[currentIndex];
     }
 
     void popBack()
@@ -148,28 +173,28 @@ class Files
         }
         else
         {
-            enforce(!files.empty, "No images");
-            currentIndex = files.length + -1;
+            enforce(!filteredFiles.empty, "No images");
+            currentIndex = filteredFiles.length + -1;
         }
-    }
-
-    auto array()
-    {
-        return files;
     }
 
     void jumpTo(in string s)
     {
-        const h = files.countUntil!(v => v.file.to!string == s);
+        const h = filteredFiles.countUntil!(v => v.file.to!string == s);
         if (h != -1)
         {
             currentIndex = h;
         }
     }
 
-    string[] getTags()
+    void update()
     {
-        return files[currentIndex].tags;
+        auto current = front;
+        runFilter();
+        currentIndex = filteredFiles.countUntil(current);
+        if (currentIndex == -1) {
+            currentIndex = 0;
+        }
     }
 }
 
@@ -436,6 +461,7 @@ auto createTile(string filename, Image* i)
         import imgui : ScrollAreaContext;
 
         ScrollAreaContext viewedGui;
+        ScrollAreaContext filterGui;
         ScrollAreaContext fileList;
         ScrollAreaContext fileInfo;
         ScrollAreaContext stats;
@@ -508,18 +534,23 @@ auto createTile(string filename, Image* i)
         {
             class ImguiVisitor : Visitor
             {
-                import imgui : ImGui, MouseInfo, Enabled, Sizes;
+                import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha;
+                import imgui.colorscheme : ColorScheme, defaultColorScheme, RGBA;
 
                 Window window;
                 ImGui gui;
                 Duration renderTime;
                 enum BORDER = 20;
                 string newTag;
-
+                const(ColorScheme) errorColorScheme;
                 this(Window window)
                 {
                     this.window = window;
                     gui = new ImGui("~/.config/viewed/font.ttf".expandTilde);
+                    ColorScheme h = defaultColorScheme;
+                    h.textInput.back = RGBA(255, 0, 0, 255);
+                    h.textInput.backDisabled = RGBA(255, 0, 0, 255);
+                    errorColorScheme = h;
                 }
 
                 alias visit = Visitor.visit;
@@ -529,51 +560,71 @@ auto createTile(string filename, Image* i)
                     {
                         xPos += BORDER;
                         const width = window.width / 3;
-                        gui.scrollArea(fileList, "Files %d/%d".format(files.currentIndex + 1,
-                                files.array.length), xPos, yPos, width, height, () {
-
-                            xPos += width;
-                            foreach (file; files.array)
-                            {
-                                const active = file == files.front;
-                                if ((imageChangedByKey || firstImage) && active)
-                                {
-                                    gui.revealNextElement(fileList);
-                                    imageChangedByKey = false;
-                                    firstImage = false;
-                                }
-                                // dfmt off
-                            const shortenedFilename = file.file
-                                .to!string
-                                .replace(args.directory !is null ? args.directory : "", "")
-                                .replace(args.album !is null? args.album.dirName : "", "")
-                                .replaceFirst(regex("^/"), "");
-                            // dfmt on
-                                const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
-                                if (gui.button(title, active ? Enabled.no : Enabled.yes))
-                                {
-                                    files.select(file);
-                                    state = state.updateAndStore(files, args);
-                                    // dfmt off
-                                auto currentImage = files.front;
-                                spawn(
-                                    &loadNextImageSpawnable,
-                                    vec2(window.width, window.height),
-                                    cast(shared)currentImage);
-                                // dfmt on
-                                }
-                            }
-                        }, true, 2000);
+                        // dfmt off
+                        string title = "Files %d/%d/%d".format(files.currentIndex + 1,
+                                                               files.filteredFiles.length,
+                                                                  files.files.length);
+                        gui.scrollArea(fileList, title,
+                                       xPos, yPos, width, height,
+                                       () {
+                                           if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
+                                               auto currentFile = files.front;
+                                               auto currentCount = files.filteredFiles.length;
+                                               files.update();
+                                               if ((currentFile != files.front) || (currentCount != files.filteredFiles.length)) {
+                                                   state = state.updateAndStore(files, args);
+                                                   imageChangedExternally = true;
+                                                   loadImage();
+                                               }
+                                           }
+                                       },
+                                       () {
+                                           xPos += width;
+                                           foreach (file; files.filteredFiles)
+                                           {
+                                               const active = file == files.front;
+                                               if ((imageChangedExternally || firstImage) && active)
+                                               {
+                                                   gui.revealNextElement(fileList);
+                                                   imageChangedExternally = false;
+                                                   firstImage = false;
+                                               }
+                                               // dfmt off
+                                               const shortenedFilename = file.file
+                                                   .to!string
+                                                   .replace(args.directory !is null ? args.directory : "", "")
+                                                   .replace(args.album !is null? args.album.dirName : "", "")
+                                                   .replaceFirst(regex("^/"), "");
+                                               // dfmt on
+                                               const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                                               if (gui.button(title, active ? Enabled.no : Enabled.yes))
+                                               {
+                                                   files.select(file);
+                                                   state = state.updateAndStore(files, args);
+                                                   loadImage();
+                                               }
+                                           }
+                                       }, true, 2000);
                     }
                 }
 
+                private void loadImage()
+                {
+                    // dfmt off
+                    auto currentImage = files.front;
+                    spawn(
+                        &loadNextImageSpawnable,
+                        vec2(window.width, window.height),
+                        cast(shared)currentImage);
+                    // dfmt on
+                }
                 void renderStats(ref int xPos, ref int yPos, const int height)
                 {
                     if (stats.isVisible)
                     {
                         xPos += BORDER;
                         const width = window.width / 4;
-                        gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {
+                        gui.scrollArea(stats, "Stats", xPos, yPos, width, height, (){},() {
                             xPos += width;
                             gui.label("UI Rendertime:");
                             gui.value(renderTime.total!("msecs")
@@ -589,7 +640,7 @@ auto createTile(string filename, Image* i)
                     {
                         xPos += BORDER;
                         const width = max(0, window.width - BORDER - xPos);
-                        gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {
+                        gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, (){},  () {
                             xPos += width;
                             auto imageFile = files.front;
                             auto imageDirEntry = imageFile.file;
@@ -638,14 +689,14 @@ auto createTile(string filename, Image* i)
                     if (viewedGui.isVisible)
                     {
                         // dfmt off
-                    const scrollHeight = Sizes.SCROLL_AREA_HEADER
-                        + Sizes.SCROLL_AREA_PADDING
-                        + Sizes.SLIDER_HEIGHT
-                        + Sizes.SCROLL_BAR_SIZE;
-                    // dfmt on
+                        const scrollHeight = Sizes.SCROLL_AREA_HEADER
+                            + Sizes.SCROLL_AREA_PADDING
+                            + Sizes.SLIDER_HEIGHT
+                            + Sizes.SCROLL_BAR_SIZE;
+                        // dfmt on
                         gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
                                 window.height - BORDER - scrollHeight,
-                                window.width - 2 * BORDER, scrollHeight, () {
+                                       window.width - 2 * BORDER, scrollHeight, () {}, () {
                             float oldZoom = zoom;
                             if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
                             {
@@ -735,14 +786,14 @@ auto createTile(string filename, Image* i)
                             state = state.updateAndStore(files, args);
                             (&loadNextImageSpawnable).spawn(vec2(window.width,
                             window.height), cast(shared) files.front);
-                            imageChangedByKey = true;
+                            imageChangedExternally = true;
                         });
                         gui.hotKey(['n', ' ', 262], () {
                             files.popFront;
                             state = state.updateAndStore(files, args);
                             (&loadNextImageSpawnable).spawn(vec2(window.width,
                             window.height), cast(shared) files.front);
-                            imageChangedByKey = true;
+                            imageChangedExternally = true;
                         });
                         // gui hotkeys
                         gui.hotKey('f', () { fileList.toggle(); });
@@ -766,9 +817,8 @@ auto createTile(string filename, Image* i)
             }
         }
 
-        auto window = new Window(scene, 800, 600, (Window w, int key, int /+scancode+/ ,
+        auto window = new Window("viewed", scene, 800, 600, (Window w, int key, int /+scancode+/ ,
                 int action, int /+mods+/ ) {
-            writeln(key);
             if (action != GLFW_PRESS)
             {
                 return;

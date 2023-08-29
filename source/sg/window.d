@@ -12,6 +12,7 @@ import bindbc.glfw : loadGLFW, GLFWwindow, glfwSupport,
     GLFW_PRESS, GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_RIGHT, glfwGetWindowUserPointer;
 import bindbc.opengl : loadOpenGL, GLSupport, GL_TRUE, glGetString,
     GL_MAX_TEXTURE_SIZE, GL_VENDOR, GL_RENDERER, GL_VERSION;
+import std.string : toStringz;
 
 version (Default)
 {
@@ -61,6 +62,7 @@ void loadBindBCOpenGL()
  +/
 class Window
 {
+    string title;
     Scene scene;
     GLFWwindow* window;
     int width;
@@ -82,8 +84,9 @@ class Window
     KeyCallback keyCallback;
     alias CharCallback = void delegate(Window w, uint unicode);
     CharCallback charCallback;
-    this(Scene scene, int width, int height, KeyCallback keyCallback, CharCallback charCallback)
+    this(string title, Scene scene, int width, int height, KeyCallback keyCallback, CharCallback charCallback)
     {
+        this.title = title;
         this.scene = scene;
         scroll.reset;
         scene.get.setRenderThread(thisTid);
@@ -98,7 +101,7 @@ class Window
             glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         }
-        window = glfwCreateWindow(width, height, "test", null, null);
+        window = glfwCreateWindow(width, height, title.toStringz, null, null);
         window.glfwSetWindowUserPointer(cast(void*) this);
         window.glfwSetKeyCallback(&staticKeyCallback);
         window.glfwSetCharCallback(&staticCharCallback);

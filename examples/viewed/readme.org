@@ -3,6 +3,9 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
+** TODO add filter to files list ...
+** TODO show tags in file list??ß
+perhaps only iotd and stars?
 ** TODO profile rendering
 * Done Ideas
 ** DONE clip when creating the gfxcommands
