@@ -7,8 +7,15 @@ import bindbc.glfw : GLFW_RELEASE, GLFW_PRESS, GLFW_KEY_ENTER,
 import btl.vector : Vector;
 import gamut : Image;
 import gl3n.linalg : vec2, vec3;
-import mir.deser.json : deserializeJson;
-import mir.ser.json : serializeJson;
+
+version (unittest)
+{
+}
+else
+{
+    import mir.deser.json : deserializeJson;
+    import mir.ser.json : serializeJson;
+}
 import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
     IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance,
     ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
@@ -31,6 +38,7 @@ import core.time : Duration;
 import std.datetime.stopwatch : StopWatch, AutoStart;
 import std.datetime.systime : SysTime, Clock;
 import args : Args;
+import viewed.expression;
 
 version (unittest)
 {
@@ -106,12 +114,12 @@ class Files
         // dfmt off
         files = directories.map!(
             dir => dir
-              .expandTilde
-              .dirEntries(IMAGE_PATTERN, SpanMode.depth)
-              .array
+            .expandTilde
+            .dirEntries(IMAGE_PATTERN, SpanMode.depth)
+            .array
             .sort.map!(dirEntry => new ImageFile(dirEntry)))
-          .joiner
-          .array;
+            .joiner
+            .array;
         runFilter();
         init();
     }
@@ -125,13 +133,16 @@ class Files
         }
         else
         {
-            filteredFiles = files.filter!(f => !f.tags.find(filter).empty).array;
-            if (filteredFiles.empty)
+            try {
+                auto matcher = filter.matcherForExpression;
+                filteredFiles = files.filter!(f => matcher.matches(f.tags)).array;
+                filterState = true;
+            }
+            catch (Exception e)
             {
+                writeln(e);
                 filteredFiles = files;
                 filterState = false;
-            } else {
-                filterState = true;
             }
         }
     }
@@ -364,7 +375,13 @@ auto createTile(string filename, Image* i)
         auto updateAndStore(Files files, Args args)
         {
             indices[key(args)] = files.front.file;
-            stateFile.write(serializeJson(this));
+            version (unittest)
+            {
+            }
+            else
+            {
+                stateFile.write(serializeJson(this));
+            }
             return this;
         }
 
@@ -387,13 +404,20 @@ auto createTile(string filename, Image* i)
         }
         if (args.album.length > 0)
         {
-            args.album = args.album.expandTilde;
-            string[] directories = args.album
-                .readText
-                .deserializeJson!(string[])
-                .map!(d => "%s/%s".format(args.album.dirName, d))
-                .array;
-            return new Files(directories);
+            version (unittest)
+            {
+                assert(0);
+            }
+            else
+            {
+                args.album = args.album.expandTilde;
+                string[] directories = args.album
+                    .readText
+                    .deserializeJson!(string[])
+                    .map!(d => "%s/%s".format(args.album.dirName, d))
+                    .array;
+                return new Files(directories);
+            }
         }
         else
         {
@@ -409,13 +433,20 @@ auto createTile(string filename, Image* i)
 
     auto readStatefile()
     {
-        try
-        {
-            return stateFile().readText().deserializeJson!(State);
-        }
-        catch (Exception e)
+        version (unittest)
         {
             return new State();
+        }
+        else
+        {
+            try
+            {
+                return stateFile().readText().deserializeJson!(State);
+            }
+            catch (Exception e)
+            {
+                return new State();
+            }
         }
     }
 
@@ -437,13 +468,13 @@ auto createTile(string filename, Image* i)
     public void viewedMain(Args args)
     {
         /+
-    auto sw = StopWatch(AutoStart.yes);
-    Image* image = new Image;
-    string benchmark = "images/1/monalisa-original.jpg";
-    image.loadFromFile(benchmark);
-    auto loadDuration = sw.peek.total!("msecs");
-    writeln("single threaded ", benchmark, ": ", loadDuration);
-    +/
+     auto sw = StopWatch(AutoStart.yes);
+     Image* image = new Image;
+     string benchmark = "images/1/monalisa-original.jpg";
+     image.loadFromFile(benchmark);
+     auto loadDuration = sw.peek.total!("msecs");
+     writeln("single threaded ", benchmark, ": ", loadDuration);
+     +/
         args.directory.expandTilde;
         vec2 currentImageDimension;
         long currentLoadDuration;
@@ -561,294 +592,293 @@ auto createTile(string filename, Image* i)
                         xPos += BORDER;
                         const width = window.width / 3;
                         // dfmt off
-                        string title = "Files %d/%d/%d".format(files.currentIndex + 1,
-                                                               files.filteredFiles.length,
-                                                                  files.files.length);
-                        gui.scrollArea(fileList, title,
-                                       xPos, yPos, width, height,
-                                       () {
-                                           if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
-                                               auto currentFile = files.front;
-                                               auto currentCount = files.filteredFiles.length;
-                                               files.update();
-                                               if ((currentFile != files.front) || (currentCount != files.filteredFiles.length)) {
-                                                   state = state.updateAndStore(files, args);
-                                                   imageChangedExternally = true;
-                                                   loadImage();
-                                               }
+                    string title = "Files %d/%d/%d".format(files.currentIndex + 1,
+                                                           files.filteredFiles.length,
+                                                           files.files.length);
+                    gui.scrollArea(fileList, title,
+                                   xPos, yPos, width, height,
+                                   () {
+                                       if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
+                                           auto currentFile = files.front;
+                                           auto currentCount = files.filteredFiles.length;
+                                           files.update();
+                                           if ((currentFile != files.front) || (currentCount != files.filteredFiles.length)) {
+                                               state = state.updateAndStore(files, args);
+                                               imageChangedExternally = true;
+                                               loadImage();
                                            }
-                                       },
-                                       () {
-                                           xPos += width;
-                                           foreach (file; files.filteredFiles)
+                                       }
+                                   },
+                                   () {
+                                       xPos += width;
+                                       foreach (file; files.filteredFiles)
+                                       {
+                                           const active = file == files.front;
+                                           if ((imageChangedExternally || firstImage) && active)
                                            {
-                                               const active = file == files.front;
-                                               if ((imageChangedExternally || firstImage) && active)
-                                               {
-                                                   gui.revealNextElement(fileList);
-                                                   imageChangedExternally = false;
-                                                   firstImage = false;
-                                               }
-                                               // dfmt off
-                                               const shortenedFilename = file.file
-                                                   .to!string
-                                                   .replace(args.directory !is null ? args.directory : "", "")
-                                                   .replace(args.album !is null? args.album.dirName : "", "")
-                                                   .replaceFirst(regex("^/"), "");
-                                               // dfmt on
-                                               const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
-                                               if (gui.button(title, active ? Enabled.no : Enabled.yes))
-                                               {
-                                                   files.select(file);
-                                                   state = state.updateAndStore(files, args);
-                                                   loadImage();
-                                               }
+                                               gui.revealNextElement(fileList);
+                                               imageChangedExternally = false;
+                                               firstImage = false;
                                            }
-                                       }, true, 2000);
-                    }
-                }
-
-                private void loadImage()
-                {
-                    // dfmt off
-                    auto currentImage = files.front;
-                    spawn(
-                        &loadNextImageSpawnable,
-                        vec2(window.width, window.height),
-                        cast(shared)currentImage);
-                    // dfmt on
-                }
-                void renderStats(ref int xPos, ref int yPos, const int height)
-                {
-                    if (stats.isVisible)
-                    {
-                        xPos += BORDER;
-                        const width = window.width / 4;
-                        gui.scrollArea(stats, "Stats", xPos, yPos, width, height, (){},() {
-                            xPos += width;
-                            gui.label("UI Rendertime:");
-                            gui.value(renderTime.total!("msecs")
-                                .to!string);
-                            gui.separatorLine();
-                        });
-                    }
-                }
-
-                void renderFileInfo(ref int xPos, ref int yPos, const int height)
-                {
-                    if (fileInfo.isVisible)
-                    {
-                        xPos += BORDER;
-                        const width = max(0, window.width - BORDER - xPos);
-                        gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, (){},  () {
-                            xPos += width;
-                            auto imageFile = files.front;
-                            auto imageDirEntry = imageFile.file;
-                            gui.label("Filename:");
-                            gui.value(imageDirEntry);
-                            gui.separatorLine();
-                            gui.label("Filesize:");
-
-                            gui.value(imageDirEntry.size.formatBigNumber);
-                            gui.separatorLine();
-                            if (!currentImageDimension.x.isNaN)
-                            {
-                                gui.label("Dimension:");
-                                gui.value(currentImageDimension.to!string);
-                                gui.separatorLine();
-                                gui.label("Pixels:");
-                                gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
-                                    .formatBigNumber);
-                                gui.separatorLine();
-                            }
-                            if (currentError.length)
-                            {
-                                gui.label("Error:");
-                                gui.value(currentError);
-                                gui.separatorLine();
-                            }
-                            gui.label("Load duration:");
-                            gui.value(currentLoadDuration.to!string);
-                            gui.separatorLine();
-                            gui.label("Tags");
-                            foreach (tag; imageFile.tags)
-                            {
-                                gui.value(tag);
-                            }
-                            if (gui.textInput("New tag", newTag))
-                            {
-                                imageFile.addTag(newTag);
-                            }
-                            gui.separatorLine();
-                        });
-                    }
-                }
-
-                void renderGui(ref int xPos, ref int yPos, ref int height)
-                {
-                    if (viewedGui.isVisible)
-                    {
-                        // dfmt off
-                        const scrollHeight = Sizes.SCROLL_AREA_HEADER
-                            + Sizes.SCROLL_AREA_PADDING
-                            + Sizes.SLIDER_HEIGHT
-                            + Sizes.SCROLL_BAR_SIZE;
-                        // dfmt on
-                        gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
-                                window.height - BORDER - scrollHeight,
-                                       window.width - 2 * BORDER, scrollHeight, () {}, () {
-                            float oldZoom = zoom;
-                            if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
-                            {
-                                zoomImage(window, currentImageDimension, oldZoom, zoom);
-                            }
-                        }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
-                        height -= scrollHeight + BORDER;
-                    }
-                }
-
-                override void visit(SceneData n)
-                {
-                    const sw = StopWatch(AutoStart.yes);
-                    int xPos = 0;
-                    int yPos = BORDER;
-                    int height = window.height - 2 * BORDER;
-                    auto mouse = window.getMouseInfo();
-                    auto scrollInfo = window.getAndResetScrollInfo();
-                    gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
-                            cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
-                            window.width, window.height, window.unicode, () {
-
-                        auto t = Clock.currTime;
-                        viewedGui.animate(t);
-                        fileList.animate(t);
-                        fileInfo.animate(t);
-                        stats.animate(t);
-
-                        renderGui(xPos, yPos, height);
-                        renderFileList(xPos, yPos, height);
-                        renderStats(xPos, yPos, height);
-                        renderFileInfo(xPos, yPos, height);
-
-                        //movement
-                        gui.hotKey('w', () {
-                            move(0, 10, window, currentImageDimension, zoom);
-                        });
-                        gui.hotKey('a', () {
-                            move(-10, 0, window, currentImageDimension, zoom);
-                        });
-                        gui.hotKey('s', () {
-                            move(0, -10, window, currentImageDimension, zoom);
-                        });
-                        gui.hotKey('d', () {
-                            move(10, 0, window, currentImageDimension, zoom);
-                        });
-                        gui.hotKey('+', () {
-                            zoomImage(window, currentImageDimension, zoom, zoom + zoomDelta);
-                        });
-                        gui.hotKey('-', () {
-                            zoomImage(window, currentImageDimension, zoom, zoom - zoomDelta);
-                        });
-                        gui.hotKey('1', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 / 16);
-                        });
-                        gui.hotKey('2', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 / 8);
-                        });
-                        gui.hotKey('3', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 / 4);
-                        });
-                        gui.hotKey('4', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 / 3);
-                        });
-                        gui.hotKey('5', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0);
-                        });
-                        gui.hotKey('6', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 * 2);
-                        });
-                        gui.hotKey('7', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 * 3);
-                        });
-                        gui.hotKey('8', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 * 4);
-                        });
-                        gui.hotKey('9', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 * 5);
-                        });
-                        gui.hotKey('0', () {
-                            zoomImage(window, currentImageDimension, zoom, 1.0 * 6);
-                        });
-
-                        // image navigation
-                        gui.hotKey(['b', 263], () {
-                            files.popBack;
+                                           // dfmt off
+                                           const shortenedFilename = file.file
+                                               .to!string
+                                               .replace(args.directory !is null ? args.directory : "", "")
+                                               .replace(args.album !is null? args.album.dirName : "", "")
+                                               .replaceFirst(regex("^/"), "");
+                                           // dfmt on
+                        const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                        if (gui.button(title, active ? Enabled.no : Enabled.yes))
+                        {
+                            files.select(file);
                             state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width,
-                            window.height), cast(shared) files.front);
-                            imageChangedExternally = true;
-                        });
-                        gui.hotKey(['n', ' ', 262], () {
-                            files.popFront;
-                            state = state.updateAndStore(files, args);
-                            (&loadNextImageSpawnable).spawn(vec2(window.width,
-                            window.height), cast(shared) files.front);
-                            imageChangedExternally = true;
-                        });
-                        // gui hotkeys
-                        gui.hotKey('f', () { fileList.toggle(); });
-                        gui.hotKey('i', () { fileInfo.toggle(); });
-                        gui.hotKey(',', () { stats.toggle(); });
-                        gui.hotKey('g', () { viewedGui.toggle(); });
-                        // debug hotkey
-                        gui.hotKey('p', () {
-                            scene.get.accept(new PrintVisitor());
-                        });
-                    });
-                    import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
-                        GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
-
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    glDisable(GL_DEPTH_TEST);
-                    gui.render();
-                    renderTime = sw.peek;
-                }
+                            loadImage();
+                        }
+                    }
+                }, true, 2000);
             }
         }
 
-        auto window = new Window("viewed", scene, 800, 600, (Window w, int key, int /+scancode+/ ,
-                int action, int /+mods+/ ) {
-            if (action != GLFW_PRESS)
-            {
-                return;
-            }
-            switch (key)
-            {
-            case GLFW_KEY_ENTER:
-                w.unicode = 0x0d;
-                break;
-            case GLFW_KEY_BACKSPACE:
-                w.unicode = 0x08;
-                break;
-            case GLFW_KEY_RIGHT:
-                w.unicode = 262;
-                break;
-            case GLFW_KEY_LEFT:
-                w.unicode = 263;
-                break;
-            case GLFW_KEY_ESCAPE:
-                w.unicode = 0x27;
-                break;
-            default:
-                break;
-            }
-        }, (Window w, uint code) { w.unicode = code; });
-        loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+        private void loadImage()
+        {
+            // dfmt off
+                auto currentImage = files.front;
+                spawn(
+                    &loadNextImageSpawnable,
+                    vec2(window.width, window.height),
+                    cast(shared)currentImage);
+                // dfmt on
+        }
 
-        Visitor renderVisitor = new RenderVisitor(window);
-        Visitor imguiVisitor = new ImguiVisitor(window);
-        // dfmt off
+        void renderStats(ref int xPos, ref int yPos, const int height)
+        {
+            if (stats.isVisible)
+            {
+                xPos += BORDER;
+                const width = window.width / 4;
+                gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {}, () {
+                    xPos += width;
+                    gui.label("UI Rendertime:");
+                    gui.value(renderTime.total!("msecs")
+                        .to!string);
+                    gui.separatorLine();
+                });
+            }
+        }
+
+        void renderFileInfo(ref int xPos, ref int yPos, const int height)
+        {
+            if (fileInfo.isVisible)
+            {
+                xPos += BORDER;
+                const width = max(0, window.width - BORDER - xPos);
+                gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {}, () {
+                    xPos += width;
+                    auto imageFile = files.front;
+                    auto imageDirEntry = imageFile.file;
+                    gui.label("Filename:");
+                    gui.value(imageDirEntry);
+                    gui.separatorLine();
+                    gui.label("Filesize:");
+
+                    gui.value(imageDirEntry.size.formatBigNumber);
+                    gui.separatorLine();
+                    if (!currentImageDimension.x.isNaN)
+                    {
+                        gui.label("Dimension:");
+                        gui.value(currentImageDimension.to!string);
+                        gui.separatorLine();
+                        gui.label("Pixels:");
+                        gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                            .formatBigNumber);
+                        gui.separatorLine();
+                    }
+                    if (currentError.length)
+                    {
+                        gui.label("Error:");
+                        gui.value(currentError);
+                        gui.separatorLine();
+                    }
+                    gui.label("Load duration:");
+                    gui.value(currentLoadDuration.to!string);
+                    gui.separatorLine();
+                    gui.label("Tags");
+                    foreach (tag; imageFile.tags)
+                    {
+                        gui.value(tag);
+                    }
+                    if (gui.textInput("New tag", newTag))
+                    {
+                        imageFile.addTag(newTag);
+                    }
+                    gui.separatorLine();
+                });
+            }
+        }
+
+        void renderGui(ref int xPos, ref int yPos, ref int height)
+        {
+            if (viewedGui.isVisible)
+            {
+                // dfmt off
+                    const scrollHeight = Sizes.SCROLL_AREA_HEADER
+                        + Sizes.SCROLL_AREA_PADDING
+                        + Sizes.SLIDER_HEIGHT
+                        + Sizes.SCROLL_BAR_SIZE;
+                    // dfmt on
+                gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
+                        window.height - BORDER - scrollHeight,
+                        window.width - 2 * BORDER, scrollHeight, () {}, () {
+                    float oldZoom = zoom;
+                    if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
+                    {
+                        zoomImage(window, currentImageDimension, oldZoom, zoom);
+                    }
+                }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
+                height -= scrollHeight + BORDER;
+            }
+        }
+
+        override void visit(SceneData n)
+        {
+            const sw = StopWatch(AutoStart.yes);
+            int xPos = 0;
+            int yPos = BORDER;
+            int height = window.height - 2 * BORDER;
+            auto mouse = window.getMouseInfo();
+            auto scrollInfo = window.getAndResetScrollInfo();
+            gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
+                    cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
+                    window.width, window.height, window.unicode, () {
+
+                auto t = Clock.currTime;
+                viewedGui.animate(t);
+                fileList.animate(t);
+                fileInfo.animate(t);
+                stats.animate(t);
+
+                renderGui(xPos, yPos, height);
+                renderFileList(xPos, yPos, height);
+                renderStats(xPos, yPos, height);
+                renderFileInfo(xPos, yPos, height);
+
+                //movement
+                gui.hotKey('w', () {
+                    move(0, 10, window, currentImageDimension, zoom);
+                });
+                gui.hotKey('a', () {
+                    move(-10, 0, window, currentImageDimension, zoom);
+                });
+                gui.hotKey('s', () {
+                    move(0, -10, window, currentImageDimension, zoom);
+                });
+                gui.hotKey('d', () {
+                    move(10, 0, window, currentImageDimension, zoom);
+                });
+                gui.hotKey('+', () {
+                    zoomImage(window, currentImageDimension, zoom, zoom + zoomDelta);
+                });
+                gui.hotKey('-', () {
+                    zoomImage(window, currentImageDimension, zoom, zoom - zoomDelta);
+                });
+                gui.hotKey('1', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 / 16);
+                });
+                gui.hotKey('2', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 / 8);
+                });
+                gui.hotKey('3', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 / 4);
+                });
+                gui.hotKey('4', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 / 3);
+                });
+                gui.hotKey('5', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0);
+                });
+                gui.hotKey('6', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 * 2);
+                });
+                gui.hotKey('7', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 * 3);
+                });
+                gui.hotKey('8', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 * 4);
+                });
+                gui.hotKey('9', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 * 5);
+                });
+                gui.hotKey('0', () {
+                    zoomImage(window, currentImageDimension, zoom, 1.0 * 6);
+                });
+
+                // image navigation
+                gui.hotKey(['b', 263], () {
+                    files.popBack;
+                    state = state.updateAndStore(files, args);
+                    (&loadNextImageSpawnable).spawn(vec2(window.width,
+                    window.height), cast(shared) files.front);
+                    imageChangedExternally = true;
+                });
+                gui.hotKey(['n', ' ', 262], () {
+                    files.popFront;
+                    state = state.updateAndStore(files, args);
+                    (&loadNextImageSpawnable).spawn(vec2(window.width,
+                    window.height), cast(shared) files.front);
+                    imageChangedExternally = true;
+                });
+                // gui hotkeys
+                gui.hotKey('f', () { fileList.toggle(); });
+                gui.hotKey('i', () { fileInfo.toggle(); });
+                gui.hotKey(',', () { stats.toggle(); });
+                gui.hotKey('g', () { viewedGui.toggle(); });
+                // debug hotkey
+                gui.hotKey('p', () { scene.get.accept(new PrintVisitor()); });
+            });
+            import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
+                GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
+
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDisable(GL_DEPTH_TEST);
+            gui.render();
+            renderTime = sw.peek;
+        }
+    }
+}
+
+auto window = new Window("viewed", scene, 800, 600, (Window w, int key, int /+scancode+/ ,
+        int action, int /+mods+/ ) {
+    if (action != GLFW_PRESS)
+    {
+        return;
+    }
+    switch (key)
+    {
+    case GLFW_KEY_ENTER:
+        w.unicode = 0x0d;
+        break;
+    case GLFW_KEY_BACKSPACE:
+        w.unicode = 0x08;
+        break;
+    case GLFW_KEY_RIGHT:
+        w.unicode = 262;
+        break;
+    case GLFW_KEY_LEFT:
+        w.unicode = 263;
+        break;
+    case GLFW_KEY_ESCAPE:
+        w.unicode = 0x27;
+        break;
+    default:
+        break;
+    }
+}, (Window w, uint code) { w.unicode = code; });
+loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+
+Visitor renderVisitor = new RenderVisitor(window);
+Visitor imguiVisitor = new ImguiVisitor(window);
+// dfmt off
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),
@@ -856,19 +886,19 @@ auto createTile(string filename, Image* i)
     ];
     // dfmt on
 
-        while (!window.window.glfwWindowShouldClose())
-        {
-            foreach (visitor; visitors)
-            {
-                scene.get.accept(visitor);
-            }
+while (!window.window.glfwWindowShouldClose())
+{
+    foreach (visitor; visitors)
+    {
+        scene.get.accept(visitor);
+    }
 
-            window.window.glfwSwapBuffers();
+    window.window.glfwSwapBuffers();
 
-            // poll glfw
-            glfwPollEvents();
-            // and scene graph "events"
-            // dfmt off
+    // poll glfw
+    glfwPollEvents();
+    // and scene graph "events"
+    // dfmt off
         receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
@@ -886,5 +916,5 @@ auto createTile(string filename, Image* i)
                        }
         );
         // dfmt on
-        }
-    }
+}
+}

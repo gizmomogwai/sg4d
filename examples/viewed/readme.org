@@ -3,11 +3,14 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
-** TODO add filter to files list ...
-** TODO show tags in file list??ß
+** DONE add filter to files list ...
+CLOSED: [2023-08-30 Wed 17:47]
+- CLOSING NOTE [2023-08-30 Wed 17:47]
+** TODO show tags in file list??
 perhaps only iotd and stars?
 ** TODO profile rendering
 * Done Ideas
+** DONE implement and/or expressions for filtering on tags
 ** DONE clip when creating the gfxcommands
 ** DONE make big lists faster (e.g. all 2023 images)
 CLOSED: [2023-06-06 Tue 01:23]

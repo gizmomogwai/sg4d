@@ -6,4 +6,4 @@
 
 import unit_threaded;
 
-mixin runTestsMain!("viewed",);
+mixin runTestsMain!("viewed", "viewed.expression");

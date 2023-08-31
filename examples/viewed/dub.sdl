@@ -4,39 +4,31 @@ authors "Christian Koestlin"
 copyright "Copyright (c) 2021, Christian Koestlin"
 license "MIT"
 dependency "argparse" version=">=0.0.0"
-dependency "sg4d" path="../.."
-dependency "deetween" version="~main"
 dependency "mir-core" version="~>1.5.7"
-dependency "mir-algorithm" version="~>3.20.5"
+dependency "deetween" version="~main"
+dependency "pc4d" version="~>1.0.9"
 dependency "mir-ion" version="~>2.1.8"
+dependency "sg4d" path="../.."
+dependency "mir-algorithm" version="~>3.20.5"
 targetType "executable"
 configuration "opengl2" {
-        targetType "executable"
-        targetPath "../../out/opengl2"
-
-        versions "Default" "GL_ARB" "GL_AllowDeprecated" "DEBUG_DESTRUCTORS"
-
-        excludedSourceFiles "source/testsuite.d"
+	targetType "executable"
+	targetPath "../../out/opengl2"
+	excludedSourceFiles "source/testsuite.d"
+	versions "Default" "GL_ARB" "GL_AllowDeprecated" "DEBUG_DESTRUCTORS"
 }
 configuration "opengl33" {
-        dependency "dimgui" path="../../../_d/external/dimgui"
-
-        targetType "executable"
-        targetPath "../../out/opengl33"
-
-        versions "GL_33"
-
-        excludedSourceFiles "source/testsuite.d"
+	dependency "dimgui" path="../../../_d/external/dimgui"
+	targetType "executable"
+	targetPath "../../out/opengl33"
+	excludedSourceFiles "source/testsuite.d"
+	versions "GL_33"
 }
 configuration "unittest" {
-        dependency "dimgui" path="../../../_d/external/dimgui"
-        dependency "unit-threaded" version="~>2.1.7"
-
-        targetType "executable"
-        targetPath "../../out/tests"
-
-
-        versions "GL_33"
-
-        excludedSourceFiles "source/main.d"
+	dependency "dimgui" path="../../../_d/external/dimgui"
+	dependency "unit-threaded" version="~>2.1.7"
+	targetType "executable"
+	targetPath "../../out/tests"
+	excludedSourceFiles "source/main.d"
+	versions "GL_33"
 }
