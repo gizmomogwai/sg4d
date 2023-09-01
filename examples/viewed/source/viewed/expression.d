@@ -1,6 +1,6 @@
 module viewed.expression;
 
-import pc4d.parsers : alnum, match, lazyParser;
+import pc4d.parsers : alnum, lazyParser, regex;
 import pc4d.parser : Parser;
 import std.string : format;
 import std.algorithm : all, any;
@@ -84,14 +84,14 @@ class ExpressionParser
 
     StringParser terminal()
     {
-        return (alnum!(immutable(char)) ^^ (data) {
+        return (regex("\\s*", false) ~ alnum!(immutable(char)) ~ regex("\\s*", false)) ^^ (data) {
             return variantArray(new TagMatcher(data[0].get!string));
-        });
+        };
     }
 
     StringParser functionCall()
     {
-        return (match("(", false) ~ alnum!(immutable(char)) ~ arguments() ~ match(")", false)) ^^ (
+        return (regex("\\s*\\(\\s*", false) ~ alnum!(immutable(char)) ~ arguments() ~ regex("\\s*\\)\\s*", false)) ^^ (
                 data) {
             return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
         };
@@ -99,12 +99,7 @@ class ExpressionParser
 
     StringParser arguments()
     {
-        return *match(" ", false) ~ lazyExpression() ~ (*lazyArguments());
-    }
-
-    StringParser lazyArguments()
-    {
-        return lazyParser(&arguments);
+        return *(regex("\\s*", false) ~ lazyExpression());
     }
 }
 
@@ -185,3 +180,4 @@ auto matcherForExpression(string s)
     e.matches(["abc", "def"]).should == true;
     e.matches(["def"]).should == false;
 }
+
