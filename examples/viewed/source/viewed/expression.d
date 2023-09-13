@@ -91,7 +91,8 @@ class ExpressionParser
 
     StringParser functionCall()
     {
-        return (regex("\\s*\\(\\s*", false) ~ alnum!(immutable(char)) ~ arguments() ~ regex("\\s*\\)\\s*", false)) ^^ (
+        return (regex("\\s*\\(\\s*",
+                false) ~ alnum!(immutable(char)) ~ arguments() ~ regex("\\s*\\)\\s*", false)) ^^ (
                 data) {
             return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
         };
@@ -130,6 +131,7 @@ Functions registerFunctions()
     functions["not"] = toDelegate(&notPredicate);
     return functions;
 }
+
 @("expression parser") unittest
 {
     auto parser = new ExpressionParser(registerFunctions);
@@ -168,7 +170,6 @@ Functions registerFunctions()
     m.matches([]).should == true;
 }
 
-
 auto matcherForExpression(string s)
 {
     return new ExpressionParser(registerFunctions()).expression().parse(s).results[0].get!Matcher;
@@ -180,4 +181,3 @@ auto matcherForExpression(string s)
     e.matches(["abc", "def"]).should == true;
     e.matches(["def"]).should == false;
 }
-
