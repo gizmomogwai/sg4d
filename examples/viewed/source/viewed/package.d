@@ -74,6 +74,7 @@ class ImageFile
     DirEntry file;
     string[] tags;
     Face[] faces;
+    string allNames;
     this(DirEntry file)
     {
         this.file = file;
@@ -82,16 +83,25 @@ class ImageFile
 
     void addTag(string tag)
     {
-        if (tags.find(tag).empty)
+        if (!hasTag(tag))
         {
             tags ~= tag;
             tags.sort;
             file.storeTags(tags);
         }
     }
-    void deepface(Args args)
+    bool hasTag(string tag)
     {
-        faces = file.deepface(args);
+        return !tags.find(tag).empty;
+    }
+    auto deepface(Args args) const
+    {
+        return file.deepface(args);
+    }
+    void setFaces(Face[] faces)
+    {
+        this.faces = faces;
+        this.allNames = faces.filter!(f => f.name).map!(f => f.name).join(", ");
     }
 }
 
@@ -103,6 +113,7 @@ class Files
     public ImageFile[] filteredFiles;
     size_t currentIndex;
     enum IMAGE_PATTERN = "{*.jpg,*.png}";
+    Face[] faces;
     this(string directory)
     {
         // dfmt off
@@ -222,6 +233,10 @@ class Files
         if (currentIndex == -1) {
             currentIndex = 0;
         }
+    }
+    void updateImage(ulong index, immutable(Face)[] faces)
+    {
+        files[index].setFaces(cast(Face[])faces);
     }
 }
 
@@ -485,6 +500,12 @@ struct DeepfaceProgress
 {
     string message;
 }
+
+immutable struct FacesFound
+{
+    ulong index;
+    Face[] faces;
+}
 void runDeepface(immutable(ImageFile)[] files, Args args)
 {
     import deepface : deepface, finishDeepface;
@@ -492,13 +513,13 @@ void runDeepface(immutable(ImageFile)[] files, Args args)
         import core.thread.osthread : Thread;
         import core.time : dur;
         ownerTid.send(DeepfaceProgress("Deepface: Started"));
-        foreach (idx, file; files)
+        foreach (index, file; files)
         {
             receiveTimeout(-1.msecs, ); // to get the owner terminated exception
-            ownerTid.send(DeepfaceProgress("Deepface: Working on %s (%s%%)".format(file.file.shorten(args), (idx+1).to!float/files.length*100)));
-            Thread.sleep(50.dur!("msecs"));
+            ownerTid.send(DeepfaceProgress("Deepface: Working on %s (%s%%)".format(file.file.shorten(args), (index+1).to!float/files.length*100)));
             try {
-                file.deepface(args);
+                auto facesFound = FacesFound(index, cast(immutable)file.deepface(args));
+                ownerTid.send(facesFound);
             } catch (Exception e)
             {
                 writeln(e);
@@ -750,9 +771,28 @@ public void viewedMain(Args args)
                                 imageFile.addTag(newTag);
                             }
                             gui.separatorLine();
+                            if (imageFile.faces)
+                            {
+                                gui.label(format!("Faces %s (%s)")(imageFile.faces.length, imageFile.allNames));
+                                foreach (face; imageFile.faces)
+                                {
+                                    if (face.name)
+                                    {
+                                    string newTag = format!("identity:%s")(face.name);
+                                    if (!imageFile.hasTag(newTag))
+                                    {
+                                        if (gui.button("Add tag " ~ newTag))
+                                        {
+                                            imageFile.addTag(newTag);
+                                        }
+                                    }
+                                    }
+                                }
+                                gui.separatorLine();
+                            }
                         });
                 }
-            }
+            } // renderFileInfo
 
             void renderGui(ref int xPos, ref int yPos, ref int height)
             {
@@ -963,7 +1003,12 @@ public void viewedMain(Args args)
                        (DeepfaceProgress p)
                        {
                            progress = p.message;
-                       }
+                       },
+                       (immutable(FacesFound) found)
+                       {
+                           writeln("Faces found ", found);
+                           files.updateImage(found.index, found.faces);
+                       },
         );
         // dfmt on
     }

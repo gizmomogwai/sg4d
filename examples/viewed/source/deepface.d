@@ -2,7 +2,7 @@ module deepface;
 
 import std.process : executeShell, pipeShell, Redirect, ProcessPipes;
 import std.stdio : writeln; // TODO
-import std.string : format, strip, toStringz;
+import std.string : format, strip, toStringz, replace;
 import std.array : split;
 import std.array : join;
 import std.regex : ctRegex, regex, matchAll;
@@ -15,9 +15,10 @@ import std.stdio : File;
 import std.file : mkdirRecurse, DirEntry, exists, readText, write;
 import std.algorithm : map;
 import std.concurrency : initOnce;
-
+import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 version (unittest)
 {
+    import unit_threaded : should;
 }
 else
 {
@@ -30,10 +31,45 @@ string calcDeepfacePath(DirEntry file, Args args)
     return args.deepfaceDirectory.buildPath(file.shorten(args));
 }
 
+string calcIdentityName(string s, string suffix)
+{
+    string h = s.replace(suffix ~ "/", "");
+    string result = "";
+    foreach (c; h)
+    {
+        if (c == '/')
+        {
+            break;
+        }
+        result ~= c;
+    }
+    return result;
+}
+@("calcIdentityName from path") unittest {
+    "abc/ME/def".calcIdentityName("abc").should == "ME";
+}
+@serdeIgnoreUnexpectedKeys
 struct Face {
+    @serdeKeys("file_name")
     string face;
-    string rectangle;
+    //string rectangle;
+    @serdeOptional
     string name; /// null if not recognized
+    Match[] match;
+    void calcName(Args args)
+    {
+        foreach (m; match)
+        {
+            name = m.identity.calcIdentityName(args.deepfaceIdentities); // TODO this looks only at first identity
+            break;
+        }
+    }
+}
+
+@serdeIgnoreUnexpectedKeys
+struct Match
+{
+    string identity;
 }
 
 class DeepfaceProcess
@@ -74,7 +110,19 @@ class DeepfaceProcess
             deepfaceCache.write(response);
         }
         writeln("Deepface info: ", response);
-        return null;
+        version (unittest)
+        {
+            return null;
+        }
+        else
+        {
+            Face[] faces = deserializeJson!(Face[])(response);
+            foreach (ref face; faces)
+            {
+                face.calcName(args);
+            }
+            return faces;
+        }
     }
     void finish()
     {
@@ -91,51 +139,10 @@ void finishDeepface(Args args)
     DeepfaceProcess.getInstance(args.deepfaceIdentities).finish;
 }
 
-auto deepface(DirEntry file, Args args)
+Face[] deepface(DirEntry file, Args args)
 {
 
     return DeepfaceProcess
         .getInstance(args.deepfaceIdentities)
         .extractFaces(file, args);
-}
-
-void deepface2(string dir)
-{
-    auto command = "deepface extract_faces %s".format(dir);
-    auto output = command.executeShell;
-    if (output.status != 0)
-    {
-        throw new Exception("Cannot run " ~ command);
-    }
-    auto faces = output.output.matchAll(regex(
-                                            ", 'facial_area': \\{'x': (?P<x>\\d+), 'y': (?P<y>\\d+), 'w': (?P<width>\\d+), 'h': (?P<height>\\d+)\\}, 'confidence': (?P<confidence>.+)\\}"));
-    if (!faces.empty)
-    {
-        Image image;
-        image.loadFromFile(dir);
-        if (!image.isValid)
-        {
-            throw new Exception("Cannot load image");
-        }
-
-        int idx = 0;
-        foreach (face; faces)
-        {
-            const x = face["x"].to!int;
-            const y = face["y"].to!int;
-            const w = face["width"].to!int;
-            const h = face["height"].to!int;
-            Image part = Image(w, h, PixelType.rgb8);
-            for (int j=0; j<h; ++j)
-            {
-                for (int i=0; i<w; ++i)
-                {
-                    *((cast(ubyte*)part.scanptr(j))+3*i+0) = *((cast(ubyte*)image.scanptr(j+y))+3*(i+x)+0);
-                    *((cast(ubyte*)part.scanptr(j))+3*i+1) = *((cast(ubyte*)image.scanptr(j+y))+3*(i+x)+1);
-                    *((cast(ubyte*)part.scanptr(j))+3*i+2) = *((cast(ubyte*)image.scanptr(j+y))+3*(i+x)+2);
-                }
-            }
-            part.saveToFile(ImageFormat.JPEG, "%s-%s.jpg".format(dir, idx++));
-        }
-    }
 }
