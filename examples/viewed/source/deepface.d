@@ -56,6 +56,7 @@ struct Face {
     @serdeOptional
     string name; /// null if not recognized
     Match[] match;
+    Region region;
     void calcName(Args args)
     {
         foreach (m; match)
@@ -72,6 +73,15 @@ struct Match
     string identity;
 }
 
+struct Region
+{
+    int x;
+    int y;
+    @serdeKeys("w")
+    int width;
+    @serdeKeys("h")
+    int height;
+}
 class DeepfaceProcess
 {
     __gshared DeepfaceProcess instance;

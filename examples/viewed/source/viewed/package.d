@@ -6,8 +6,10 @@ import bindbc.glfw : GLFW_RELEASE, GLFW_PRESS, GLFW_KEY_ENTER,
     glfwPollEvents, GLFW_KEY_ESCAPE;
 import btl.vector : Vector;
 import gamut : Image;
+import gamut.types : PixelType;
 import gl3n.linalg : vec2, vec3;
 import deepface : deepface, Face;
+import imgui.colorscheme : RGBA;
 
 version (unittest)
 {
@@ -49,6 +51,21 @@ version (unittest)
 
 bool imageChangedExternally = false;
 bool firstImage = true;
+
+static RGBA[] colors =
+    [
+        RGBA(255, 0,   0,   128),
+        RGBA(255, 255, 0,   128),
+        RGBA(0,   255, 0,   128),
+        RGBA(0,   255, 255, 128),
+        RGBA(0,     0, 255, 128),
+        RGBA(255,   0, 255, 128),
+    ];
+
+string tag(string s)
+{
+    return format!("identity:%s")(s);
+}
 
 string formatBigNumber(T)(const T number)
 {
@@ -327,7 +344,41 @@ class LoadException : Exception
     }
 }
 
-void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile)
+void setPixel(Image* image, int x, int y, ref RGBA color)
+{
+    ubyte[] bytes = cast(ubyte[])image.scanline(y);
+    const reminder = 255-color.a;
+    if (image.type == PixelType.rgb8)
+    {
+        const idx = x*3;
+        bytes[idx+0] = cast(ubyte)((bytes[idx+0]*reminder + color.r*color.a)/255);
+        bytes[idx+1] = cast(ubyte)((bytes[idx+1]*reminder + color.g*color.a)/255);
+        bytes[idx+2] = cast(ubyte)((bytes[idx+2]*reminder + color.b*color.a)/255);
+    }
+    else if (image.type == PixelType.rgba8)
+    {
+        const idx = x*4;
+        bytes[idx+0] = cast(ubyte)((bytes[idx+0]*reminder + color.r*color.a)/255);
+        bytes[idx+1] = cast(ubyte)((bytes[idx+1]*reminder + color.g*color.a)/255);
+        bytes[idx+2] = cast(ubyte)((bytes[idx+2]*reminder + color.b*color.a)/255);
+        bytes[idx+3] = cast(ubyte)((bytes[idx+3]*reminder + color.a*color.a)/255);
+        throw new Exception("fuck off");
+    }
+}
+void drawRect(Image* image, int x, int y, int width, int height, ref RGBA color)
+{
+    for (int j=y; j<y+height; ++j)
+    {
+        image.setPixel(x, j, color);
+        image.setPixel(x+width-1, j, color);
+    }
+    for (int i=x+1; i<x+width-1; ++i)
+    {
+        image.setPixel(i, y, color);
+        image.setPixel(i, y+height-1, color);
+    }
+}
+void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
 {
     try
     {
@@ -350,6 +401,25 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile)
                                     "Image with filler bytes at the end of a row", loadDuration);
         }
 
+        if (showFaces)
+        {
+            foreach (index, face; nextFile.faces)
+            {
+                RGBA color = colors[index%colors.length];
+                color.a = ubyte(255);
+                // alpha = tagged -> 63, recognized -> 127, unknown -> 255
+                if (face.name)
+                {
+                    color.a /= 2;
+                }
+
+                if (face.name && nextFile.hasTag(face.name.tag))
+                {
+                    color.a /= 2;
+                }
+                image.drawRect(face.region.x, face.region.y, face.region.width, face.region.height, color);
+            }
+        }
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension,
                               ref float zoom, ref long currentLoadDuration) {
                      try
@@ -387,9 +457,9 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile)
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile)
+void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile, bool showFaces)
 {
-    loadNextImage(ownerTid, windowSize, cast() nextFile);
+    loadNextImage(ownerTid, windowSize, cast() nextFile, showFaces);
 }
 
 // maps from album://string to filename
@@ -544,6 +614,7 @@ public void viewedMain(Args args)
     auto files = getFiles(args);
     state.update(files, args);
     string progress = "Scanning for stuff";
+    bool showFaces = false;
 
     auto deepface = spawnLinked(&runDeepface, cast(immutable)files.files, args);
 
@@ -629,7 +700,7 @@ public void viewedMain(Args args)
         class ImguiVisitor : Visitor
         {
             import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha;
-            import imgui.colorscheme : ColorScheme, defaultColorScheme, RGBA;
+            import imgui.colorscheme : ColorScheme, defaultColorScheme;
 
             Window window;
             ImGui gui;
@@ -637,6 +708,7 @@ public void viewedMain(Args args)
             enum BORDER = 20;
             string newTag;
             const(ColorScheme) errorColorScheme;
+            ColorScheme facesColorScheme;
             this(Window window)
             {
                 this.window = window;
@@ -645,6 +717,7 @@ public void viewedMain(Args args)
                 h.textInput.back = RGBA(255, 0, 0, 255);
                 h.textInput.backDisabled = RGBA(255, 0, 0, 255);
                 errorColorScheme = h;
+                facesColorScheme = defaultColorScheme;
             }
 
             alias visit = Visitor.visit;
@@ -705,7 +778,9 @@ public void viewedMain(Args args)
                 spawn(
                     &loadNextImageSpawnable,
                     vec2(window.width, window.height),
-                    cast(shared)currentImage);
+                    cast(shared)currentImage,
+                    showFaces,
+                );
                 // dfmt on
             }
 
@@ -774,19 +849,27 @@ public void viewedMain(Args args)
                             if (imageFile.faces)
                             {
                                 gui.label(format!("Faces %s (%s)")(imageFile.faces.length, imageFile.allNames));
-                                foreach (face; imageFile.faces)
+                                gui.checkbox("Show faces", &showFaces);
+                                foreach (index, face; imageFile.faces)
                                 {
+                                    auto color = colors[index%colors.length];
                                     if (face.name)
                                     {
-                                    string newTag = format!("identity:%s")(face.name);
-                                    if (!imageFile.hasTag(newTag))
-                                    {
-                                        if (gui.button("Add tag " ~ newTag))
+                                        string newTag = face.name.tag;
+                                        if (!imageFile.hasTag(newTag))
                                         {
-                                            imageFile.addTag(newTag);
+                                            facesColorScheme.button.text = color;
+                                            if (gui.button("Add tag " ~ newTag, Enabled.yes, facesColorScheme))
+                                            {
+                                                imageFile.addTag(newTag);
+                                            }
                                         }
                                     }
-                                    }
+                                        else
+                                        {
+                                            facesColorScheme.label.text = color;
+                                            gui.label("Unknown face", facesColorScheme);
+                                        }
                                 }
                                 gui.separatorLine();
                             }
@@ -898,14 +981,14 @@ public void viewedMain(Args args)
                                       files.popBack;
                                       state = state.updateAndStore(files, args);
                                       (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front);
+                                                                           window.height), cast(shared) files.front, showFaces);
                                       imageChangedExternally = true;
                                   });
                               gui.hotKey(['n', ' ', 262], () {
                                       files.popFront;
                                       state = state.updateAndStore(files, args);
                                       (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front);
+                                                                           window.height), cast(shared) files.front, showFaces);
                                       imageChangedExternally = true;
                                   });
                               // gui hotkeys
@@ -955,7 +1038,7 @@ public void viewedMain(Args args)
                                      break;
                                  }
                              }, (Window w, uint code) { w.unicode = code; });
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front);
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front, showFaces);
 
     Visitor renderVisitor = new RenderVisitor(window);
     Visitor imguiVisitor = new ImguiVisitor(window);
@@ -1006,7 +1089,6 @@ public void viewedMain(Args args)
                        },
                        (immutable(FacesFound) found)
                        {
-                           writeln("Faces found ", found);
                            files.updateImage(found.index, found.faces);
                        },
         );
