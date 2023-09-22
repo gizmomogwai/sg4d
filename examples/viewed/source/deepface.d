@@ -12,7 +12,7 @@ import std.path : buildPath;
 import args : Args;
 import imagedb : shorten;
 import std.stdio : File;
-import std.file : mkdirRecurse, DirEntry, exists, readText, write;
+import std.file : mkdirRecurse, exists, readText, write;
 import std.algorithm : map;
 import std.concurrency : initOnce;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
@@ -26,7 +26,7 @@ else
     import mir.ser.json : serializeJson;
 }
 
-string calcDeepfacePath(DirEntry file, Args args)
+string calcDeepfacePath(string file, Args args)
 {
     return args.deepfaceDirectory.buildPath(file.shorten(args));
 }
@@ -97,7 +97,7 @@ class DeepfaceProcess
     {
         pipes = pipeShell("./mydeepface.py %s".format(identitiesPath), Redirect.stdin | Redirect.stdout);
     }
-    Face[] extractFaces(DirEntry file, Args args)
+    Face[] extractFaces(string file, Args args)
     {
         auto cachePath = file.calcDeepfacePath(args);
         if (!cachePath.exists)
@@ -149,7 +149,7 @@ void finishDeepface(Args args)
     DeepfaceProcess.getInstance(args.deepfaceIdentities).finish;
 }
 
-Face[] deepface(DirEntry file, Args args)
+Face[] deepface(string file, Args args)
 {
 
     return DeepfaceProcess

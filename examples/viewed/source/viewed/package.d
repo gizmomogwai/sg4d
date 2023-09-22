@@ -30,7 +30,7 @@ import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout, sp
 import std.conv : to;
 import std.datetime.stopwatch;
 import std.exception : enforce;
-import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists;
+import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists, getSize;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
@@ -88,11 +88,11 @@ auto getProjection(float zoom)
 
 class ImageFile
 {
-    DirEntry file;
+    string file;
     string[] tags;
     Face[] faces;
     string allNames;
-    this(DirEntry file)
+    this(string file)
     {
         this.file = file;
         this.tags = file.loadTags();
@@ -140,7 +140,7 @@ class Files
             .filter!(f => f.to!string.find(".deepface").empty)
             .array
             .sort
-            .map!(dirEntry => new ImageFile(dirEntry))
+            .map!(dirEntry => new ImageFile(dirEntry.name))
             .array;
         // dfmt on
         runFilter();
@@ -160,10 +160,13 @@ class Files
             dir => dir
             .expandTilde
             .dirEntries(IMAGE_PATTERN, SpanMode.depth)
+            .filter!(f => f.to!string.find(".deepface").empty)
             .array
-            .sort.map!(dirEntry => new ImageFile(dirEntry)))
+            .sort
+            .map!(dirEntry => new ImageFile(dirEntry.name)))
             .joiner
             .array;
+        // dfmt on
         runFilter();
         init();
     }
@@ -179,7 +182,7 @@ class Files
         {
             try {
                 auto matcher = filter.matcherForExpression;
-                filteredFiles = files.filter!(f => matcher.matches(f.tags)).array;
+                filteredFiles = files.filter!(f => matcher.matches(f)).array;
                 filterState = true;
             }
             catch (Exception e)
@@ -257,9 +260,9 @@ class Files
     }
 }
 
-auto loadTags(DirEntry e)
+auto loadTags(string image)
 {
-    auto propertiesFile = e.name ~ ".properties";
+    auto propertiesFile = image ~ ".properties";
     if (propertiesFile.exists)
     {
         return propertiesFile.readText.idup.loadJavaProperties;
@@ -267,9 +270,9 @@ auto loadTags(DirEntry e)
     return null;
 }
 
-auto storeTags(DirEntry e, string[] tags)
+auto storeTags(string imageFile, string[] tags)
 {
-    auto propertiesFile = e.name ~ ".properties";
+    auto propertiesFile = imageFile ~ ".properties";
     propertiesFile.write(tags.toJavaProperties());
 }
 string[] loadJavaProperties(string content)
@@ -385,15 +388,15 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
         const sw = StopWatch(AutoStart.yes);
 
         Image* image = new Image;
-        image.loadFromFile(nextFile.file.name);
+        image.loadFromFile(nextFile.file);
         auto loadDuration = sw.peek.total!("msecs");
         // dfmt off
         writeln("Image %s load%sin %sms".format(
-                    nextFile.file.name,
+                    nextFile.file,
                     image.isValid ? "ed sucessfully " : "ing failed ",
                     loadDuration));
         // dfmt on
-        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.file.name,
+        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.file,
                                                                                      image.errorMessage), image.errorMessage.to!string, loadDuration));
         if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width * 4))
         {
@@ -430,7 +433,7 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
                          zoom = min(windowSize.x.to!float / currentImageDimension.x,
                                     windowSize.y.to!float / currentImageDimension.y);
                          o.setProjection(zoom.getProjection);
-                         Node newNode = createTile(nextFile.file.name, image);
+                         Node newNode = createTile(nextFile.file, image);
                          if (o.childs.length > 0)
                          {
                              o.replaceChild(0, newNode);
@@ -809,13 +812,13 @@ public void viewedMain(Args args)
                     gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {}, () {
                             xPos += width;
                             auto imageFile = files.front;
-                            auto imageDirEntry = imageFile.file;
+                            auto imageFileName = imageFile.file;
                             gui.label("Filename:");
-                            gui.value(imageDirEntry);
+                            gui.value(imageFileName);
                             gui.separatorLine();
                             gui.label("Filesize:");
 
-                            gui.value(imageDirEntry.size.formatBigNumber);
+                            gui.value(imageFileName.getSize.formatBigNumber);
                             gui.separatorLine();
                             if (!currentImageDimension.x.isNaN)
                             {

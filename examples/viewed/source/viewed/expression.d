@@ -6,6 +6,8 @@ import std.string : format;
 import std.algorithm : all, any;
 import std.functional : toDelegate;
 import std.variant : Variant, variantArray;
+import std.algorithm : countUntil, any, startsWith;
+import viewed : ImageFile;
 
 version (unittest)
 {
@@ -13,33 +15,12 @@ version (unittest)
 }
 
 alias StringParser = Parser!(immutable(char));
-alias Predicate = bool delegate(string[], Variant[]);
+alias Predicate = bool delegate(ImageFile, Variant[]);
 alias Functions = Predicate[string];
 
 abstract class Matcher
 {
-    abstract bool matches(string[] s);
-}
-
-class TagMatcher : Matcher
-{
-    string tag;
-    this(string tag)
-    {
-        this.tag = tag;
-    }
-
-    override bool matches(string[] tags)
-    {
-        foreach (tag; tags)
-        {
-            if (this.tag == tag)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    abstract bool matches(ImageFile image);
 }
 
 class FunctionCallMatcher : Matcher
@@ -54,13 +35,13 @@ class FunctionCallMatcher : Matcher
         this.arguments = arguments;
     }
 
-    override bool matches(string[] tags)
+    override bool matches(ImageFile imageFile)
     {
         if (functionName !in functions)
         {
             throw new Exception(format!("Unknown function '%s'")(functionName));
         }
-        return functions[functionName](tags, arguments);
+        return functions[functionName](imageFile, arguments);
     }
 }
 
@@ -85,7 +66,7 @@ class ExpressionParser
     StringParser terminal()
     {
         return (regex("\\s*", false) ~ alnum!(immutable(char)) ~ regex("\\s*", false)) ^^ (data) {
-            return variantArray(new TagMatcher(data[0].get!string));
+            return variantArray(data[0].get!string);
         };
     }
 
@@ -104,23 +85,42 @@ class ExpressionParser
     }
 }
 
-bool andPredicate(string[] tags, Variant[] matchers)
+bool andPredicate(ImageFile imageFile, Variant[] arguments)
 {
-    return matchers.all!(m => m.get!Matcher.matches(tags));
+    return arguments.all!(m => m.get!Matcher.matches(imageFile));
 }
 
-bool orPredicate(string[] tags, Variant[] matchers)
+bool orPredicate(ImageFile imageFile, Variant[] arguments)
 {
-    return matchers.any!(m => m.get!Matcher.matches(tags));
+    return arguments.any!(m => m.get!Matcher.matches(imageFile));
 }
 
-bool notPredicate(string[] tags, Variant[] matchers)
+bool notPredicate(ImageFile imageFile, Variant[] arguments)
 {
-    if (matchers.length > 1)
+    if (arguments.length > 1)
     {
-        throw new Exception("not only supports one argument");
+        throw new Exception("'not' only supports one argument");
     }
-    return !matchers[0].get!Matcher.matches(tags);
+    return !arguments[0].get!Matcher.matches(imageFile);
+}
+
+bool tag(ImageFile imageFile, Variant[] arguments)
+{
+    if (arguments.length > 1)
+    {
+        throw new Exception("'tag' only supports one argument");
+    }
+    const tag = arguments[0].get!string;
+    return imageFile.tags.any!(t => t == tag);
+}
+bool tagStartsWith(ImageFile imageFile, Variant[] arguments)
+{
+    if (arguments.length > 1)
+    {
+        throw new Exception("'tagStartsWith' only supports one argument");
+    }
+    const start = arguments[0].get!string;
+    return imageFile.tags.any!(t => t.startsWith(start));
 }
 
 Functions registerFunctions()
@@ -129,45 +129,64 @@ Functions registerFunctions()
     functions["or"] = toDelegate(&orPredicate);
     functions["and"] = toDelegate(&andPredicate);
     functions["not"] = toDelegate(&notPredicate);
+    functions["tag"] = toDelegate(&tag);
+    functions["tagStartsWith"] = toDelegate(&tagStartsWith);
     return functions;
 }
 
 @("expression parser") unittest
 {
-    auto parser = new ExpressionParser(registerFunctions);
-    auto result = parser.expression.parse("abc");
+    auto parser = new ExpressionParser(registerFunctions());
+    auto result = parser.expression.parse("(tag abc)");
     result.success.should == true;
-    result.results[0].get!Matcher.matches(["abc"]).should == true;
+    ImageFile imageFile = new ImageFile("gibt nicht");
+    imageFile.tags = ["abc"];
+    result.results[0].get!Matcher.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(or abc def)");
+    result = parser.expression.parse("(or (tag abc) (tag def))");
     result.success.should == true;
     auto m = result.results[0].get!Matcher;
-    m.matches(["abc"]).should == true;
-    m.matches(["def"]).should == true;
-    m.matches(["ghi"]).should == false;
+    imageFile.tags = ["abc"];
+    m.matches(imageFile).should == true;
+    imageFile.tags = ["def"];
+    m.matches(imageFile).should == true;
+    imageFile.tags = ["ghi"];
+    m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(and abc def)");
+    result = parser.expression.parse("(and (tag abc) (tag def))");
     m = result.results[0].get!Matcher;
-    m.matches(["abc"]).should == false;
-    m.matches(["def"]).should == false;
-    m.matches(["abc", "def"]).should == true;
-    m.matches(["abc", "def", "ghi"]).should == true;
+    imageFile.tags = ["abc"];
+    m.matches(imageFile).should == false;
+    imageFile.tags = ["def"];
+    m.matches(imageFile).should == false;
+    imageFile.tags = ["abc", "def"];
+    m.matches(imageFile).should == true;
+    imageFile.tags = ["abc", "def", "ghi"];
+    m.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(and a (or b c))");
+    result = parser.expression.parse("(and (tag a) (or (tag b) (tag c)))");
     result.success.should == true;
     m = result.results[0].get!Matcher;
-    m.matches(["a", "b"]).should == true;
-    m.matches(["a", "c"]).should == true;
-    m.matches(["c"]).should == false;
-    m.matches(["a"]).should == false;
+    imageFile.tags= ["a", "b"];
+    m.matches(imageFile).should == true;
+    imageFile.tags = ["a", "c"];
+    m.matches(imageFile).should == true;
+    imageFile.tags= ["c"];
+    m.matches(imageFile).should == false;
+    imageFile.tags = ["a"];
+    m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(not a)");
+    result = parser.expression.parse("(not (tag a))");
     result.success.should == true;
     m = result.results[0].get!Matcher;
-    m.matches(["a"]).should == false;
-    m.matches(["a", "b"]).should == false;
-    m.matches(["b"]).should == true;
-    m.matches([]).should == true;
+    imageFile.tags = ["a"];
+    m.matches(imageFile).should == false;
+    imageFile.tags= ["a", "b"];
+    m.matches(imageFile).should == false;
+    imageFile.tags = ["b"];
+    m.matches(imageFile).should == true;
+    imageFile.tags = [];
+    m.matches(imageFile).should == true;
 }
 
 auto matcherForExpression(string s)
@@ -177,7 +196,10 @@ auto matcherForExpression(string s)
 
 @("parseExpression") unittest
 {
-    auto e = matcherForExpression("abc");
-    e.matches(["abc", "def"]).should == true;
-    e.matches(["def"]).should == false;
+    ImageFile imageFile = new ImageFile("gibts nicht");
+    auto e = matcherForExpression("(tag abc)");
+    imageFile.tags = ["abc", "def"];
+    e.matches(imageFile).should == true;
+    imageFile.tags = ["def"];
+    e.matches(imageFile).should == false;
 }
