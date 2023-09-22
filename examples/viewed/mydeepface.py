@@ -27,6 +27,7 @@ def main():
             model_name = "Facenet512",
             detector_backend = "retinaface",
             silent = True,
+            enforce_detection=False,
         )
         h = "["
         for index, face in enumerate(faces):

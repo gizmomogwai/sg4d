@@ -73,7 +73,7 @@ class ExpressionParser
     StringParser functionCall()
     {
         return (regex("\\s*\\(\\s*",
-                false) ~ alnum!(immutable(char)) ~ arguments() ~ regex("\\s*\\)\\s*", false)) ^^ (
+                      false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
                 data) {
             return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
         };
@@ -123,6 +123,15 @@ bool tagStartsWith(ImageFile imageFile, Variant[] arguments)
     return imageFile.tags.any!(t => t.startsWith(start));
 }
 
+bool hasFaces(ImageFile imageFile, Variant[] arguments)
+{
+    if (arguments.length > 0)
+    {
+        throw new Exception("'hasFaces' only support zero arguments");
+    }
+    return imageFile.faces !is null;
+}
+
 Functions registerFunctions()
 {
     Functions functions;
@@ -131,6 +140,7 @@ Functions registerFunctions()
     functions["not"] = toDelegate(&notPredicate);
     functions["tag"] = toDelegate(&tag);
     functions["tagStartsWith"] = toDelegate(&tagStartsWith);
+    functions["hasFaces"] = toDelegate(&hasFaces);
     return functions;
 }
 
