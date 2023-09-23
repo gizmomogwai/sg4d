@@ -126,6 +126,10 @@ class DeepfaceProcess
         }
         else
         {
+            if (response == null)
+            {
+                return null;
+            }
             Face[] faces = deserializeJson!(Face[])(response);
             foreach (ref face; faces)
             {

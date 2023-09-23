@@ -8,6 +8,7 @@ import std.functional : toDelegate;
 import std.variant : Variant, variantArray;
 import std.algorithm : countUntil, any, startsWith;
 import viewed : ImageFile;
+import std.exception : enforce;
 
 version (unittest)
 {
@@ -21,6 +22,27 @@ alias Functions = Predicate[string];
 abstract class Matcher
 {
     abstract bool matches(ImageFile image);
+}
+
+class TagMatcher : Matcher
+{
+    string tag;
+    this(string tag)
+    {
+        this.tag = tag;
+    }
+
+    override bool matches(ImageFile image)
+    {
+        foreach (tag; image.tags)
+        {
+            if (this.tag == tag)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 class FunctionCallMatcher : Matcher
@@ -66,7 +88,7 @@ class ExpressionParser
     StringParser terminal()
     {
         return (regex("\\s*", false) ~ alnum!(immutable(char)) ~ regex("\\s*", false)) ^^ (data) {
-            return variantArray(data[0].get!string);
+            return variantArray(new TagMatcher(data[0].get!string));
         };
     }
 
@@ -87,48 +109,32 @@ class ExpressionParser
 
 bool andPredicate(ImageFile imageFile, Variant[] arguments)
 {
+    enforce(arguments.length > 0, "and needs at least one argument");
     return arguments.all!(m => m.get!Matcher.matches(imageFile));
 }
 
 bool orPredicate(ImageFile imageFile, Variant[] arguments)
 {
+    enforce(arguments.length > 0, "or needs at least one argument");
     return arguments.any!(m => m.get!Matcher.matches(imageFile));
 }
 
 bool notPredicate(ImageFile imageFile, Variant[] arguments)
 {
-    if (arguments.length > 1)
-    {
-        throw new Exception("'not' only supports one argument");
-    }
+    enforce(arguments.length == 1, "not needs one argument");
     return !arguments[0].get!Matcher.matches(imageFile);
 }
 
-bool tag(ImageFile imageFile, Variant[] arguments)
-{
-    if (arguments.length > 1)
-    {
-        throw new Exception("'tag' only supports one argument");
-    }
-    const tag = arguments[0].get!string;
-    return imageFile.tags.any!(t => t == tag);
-}
 bool tagStartsWith(ImageFile imageFile, Variant[] arguments)
 {
-    if (arguments.length > 1)
-    {
-        throw new Exception("'tagStartsWith' only supports one argument");
-    }
-    const start = arguments[0].get!string;
-    return imageFile.tags.any!(t => t.startsWith(start));
+    enforce(arguments.length == 1, "tagStartsWith needs one argument");
+    const tagMatcher = arguments[0].get!TagMatcher;
+    return imageFile.tags.any!(t => t.startsWith(tagMatcher.tag));
 }
 
 bool hasFaces(ImageFile imageFile, Variant[] arguments)
 {
-    if (arguments.length > 0)
-    {
-        throw new Exception("'hasFaces' only support zero arguments");
-    }
+    enforce(arguments.length == 0, "hasFaces must not have arguments");
     return imageFile.faces !is null;
 }
 
@@ -138,7 +144,6 @@ Functions registerFunctions()
     functions["or"] = toDelegate(&orPredicate);
     functions["and"] = toDelegate(&andPredicate);
     functions["not"] = toDelegate(&notPredicate);
-    functions["tag"] = toDelegate(&tag);
     functions["tagStartsWith"] = toDelegate(&tagStartsWith);
     functions["hasFaces"] = toDelegate(&hasFaces);
     return functions;
