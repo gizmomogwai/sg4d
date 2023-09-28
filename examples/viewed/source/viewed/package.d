@@ -141,31 +141,31 @@ class ImageFile
 
 @serdeIgnoreUnexpectedKeys
 struct Metadata
-{
-    @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
-    string creationDate;
+ {
+     @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
+     string creationDate;
 
-    public static auto read(string file)
-    {
-        import std.process : execute;
-        auto exiftool = execute(["exiftool", "-json", file]);
-        if (exiftool.status != 0)
-        {
-            Metadata result;
-            return result;
-        }
+     public static auto read(string file)
+     {
+         import std.process : execute;
+         auto exiftool = execute(["exiftool", "-json", file]);
+         if (exiftool.status != 0)
+         {
+             Metadata result;
+             return result;
+         }
 
-        version (unittest) {
-            return Metadata.init;
-        }
-        else
-        {
-            import mir.deser.json : deserializeJson;
-            writeln(exiftool.output);
-            auto result = deserializeJson!(Metadata[])(exiftool.output);
-            return result[0];
-        }
-    }
+         version (unittest) {
+             return Metadata.init;
+         }
+         else
+         {
+             import mir.deser.json : deserializeJson;
+             writeln(exiftool.output);
+             auto result = deserializeJson!(Metadata[])(exiftool.output);
+             return result[0];
+         }
+     }
 }
 class Files
 {
@@ -599,21 +599,6 @@ auto readStatefile()
     }
 }
 
-struct Visible
-{
-    bool current;
-    bool should;
-    bool needsRendering()
-    {
-        return current || should;
-    }
-
-    void animationDone()
-    {
-        current = should;
-    }
-}
-
 struct DeepfaceProgress
 {
     string message;
@@ -921,11 +906,10 @@ public void viewedMain(Args args)
                                     }
                                 }
                             }
-                            if (gui.collapse("Faces", "", &showFaces))
+                            if (imageFile.faces)
                             {
-                                if (imageFile.faces)
+                                if (gui.collapse("Faces %s %s".format(imageFile.faces.length, imageFile.allNames ? "(%s)".format(imageFile.allNames) : ""), "blub", &showFaces))
                                 {
-                                    gui.label(format!("Faces %s (%s)")(imageFile.faces.length, imageFile.allNames));
                                     gui.checkbox("Show faces", &renderFaces);
                                     foreach (index, face; imageFile.faces)
                                     {
@@ -942,11 +926,11 @@ public void viewedMain(Args args)
                                                 }
                                             }
                                         }
-                                            else
-                                            {
-                                                facesColorScheme.label.text = color;
-                                                gui.label("Unknown face", facesColorScheme);
-                                            }
+                                        else
+                                        {
+                                            facesColorScheme.label.text = color;
+                                            gui.label("Unknown face", facesColorScheme);
+                                        }
                                     }
                                     gui.separatorLine();
                                 }
