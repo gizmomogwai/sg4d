@@ -1,7 +1,6 @@
 module deepface;
 
 import std.process : pipeShell, Redirect, ProcessPipes;
-import std.stdio : writeln; // TODO
 import std.string : format, strip, toStringz, replace;
 import std.array : split;
 import std.array : join;
@@ -64,8 +63,6 @@ struct Face {
         foreach (m; match)
         {
             this.name = m.identity.calcIdentityName(args.deepfaceIdentities); // TODO this looks only at first identity
-            import std.stdio : writeln;
-            writeln("Setting name ", name);
             break;
         }
     }
@@ -154,8 +151,6 @@ class DeepfaceProcess
 
 void finishDeepface(Args args)
 {
-    import std.stdio : writeln;
-    writeln("Using identities: ", args.deepfaceIdentities);
     DeepfaceProcess.getInstance(args.deepfaceIdentities).finish;
 }
 
