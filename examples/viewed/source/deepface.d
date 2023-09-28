@@ -1,6 +1,6 @@
 module deepface;
 
-import std.process : executeShell, pipeShell, Redirect, ProcessPipes;
+import std.process : pipeShell, Redirect, ProcessPipes;
 import std.stdio : writeln; // TODO
 import std.string : format, strip, toStringz, replace;
 import std.array : split;
@@ -8,7 +8,7 @@ import std.array : join;
 import std.regex : ctRegex, regex, matchAll;
 import gamut : Image, ImageFormat, PixelType;
 import std.conv : to;
-import std.path : buildPath;
+import std.path : buildPath, dirName;
 import args : Args;
 import imagedb : shorten;
 import std.stdio : File;
@@ -26,9 +26,11 @@ else
     import mir.ser.json : serializeJson;
 }
 
-string calcDeepfacePath(string file, Args args)
+string calcDeepfaceCachePath(string file, Args args)
 {
-    return args.deepfaceDirectory.buildPath(file.shorten(args));
+    auto deepfaceDirectory =
+        args.directory ? args.directory.buildPath(".deepfaceCache") : args.album.dirName.buildPath(".deepfaceCache");
+    return deepfaceDirectory.buildPath(file.shorten(args));
 }
 
 string calcIdentityName(string s, string suffix)
@@ -61,7 +63,9 @@ struct Face {
     {
         foreach (m; match)
         {
-            name = m.identity.calcIdentityName(args.deepfaceIdentities); // TODO this looks only at first identity
+            this.name = m.identity.calcIdentityName(args.deepfaceIdentities); // TODO this looks only at first identity
+            import std.stdio : writeln;
+            writeln("Setting name ", name);
             break;
         }
     }
@@ -99,7 +103,7 @@ class DeepfaceProcess
     }
     Face[] extractFaces(string file, Args args)
     {
-        auto cachePath = file.calcDeepfacePath(args);
+        auto cachePath = file.calcDeepfaceCachePath(args);
         if (!cachePath.exists)
         {
             cachePath.mkdirRecurse;
@@ -150,6 +154,8 @@ class DeepfaceProcess
 
 void finishDeepface(Args args)
 {
+    import std.stdio : writeln;
+    writeln("Using identities: ", args.deepfaceIdentities);
     DeepfaceProcess.getInstance(args.deepfaceIdentities).finish;
 }
 

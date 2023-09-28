@@ -4,11 +4,8 @@ import argparse : NamedArgument;
 
 public struct Args
 {
-    @NamedArgument("deepfaceDirectory")
-    string deepfaceDirectory;
-
     @NamedArgument("deepfaceIdentities")
-    string deepfaceIdentities;
+    string deepfaceIdentities = "~/.config/viewed/deepfaceIdentities";
 
     @NamedArgument("directory", "dir", "d")
     string directory;

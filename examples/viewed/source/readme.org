@@ -1,0 +1,6 @@
+** External Dependencies
+- deepface
+- exiftool
+** TODOs
+*** TODO reverse geocoding
+https://nominatim.org/release-docs/develop/api/Reverse/

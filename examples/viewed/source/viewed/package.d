@@ -10,6 +10,8 @@ import gamut.types : PixelType;
 import gl3n.linalg : vec2, vec3;
 import deepface : deepface, Face;
 import imgui.colorscheme : RGBA;
+import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
+
 
 version (unittest)
 {
@@ -92,6 +94,8 @@ class ImageFile
     string[] tags;
     Face[] faces;
     string allNames;
+    bool metadataRead;
+    Metadata metadata;
     this(string file)
     {
         this.file = file;
@@ -120,8 +124,49 @@ class ImageFile
         this.faces = faces;
         this.allNames = faces.filter!(f => f.name).map!(f => f.name).join(", ");
     }
+    bool hasMetadata()
+    {
+        if (metadataRead == false)
+        {
+            metadata = Metadata.read(file);
+            metadataRead = true;
+        }
+        return metadata != Metadata.init;
+    }
+    auto getMetadata()
+    {
+        return metadata;
+    }
 }
 
+@serdeIgnoreUnexpectedKeys
+struct Metadata
+{
+    @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
+    string creationDate;
+
+    public static auto read(string file)
+    {
+        import std.process : execute;
+        auto exiftool = execute(["exiftool", "-json", file]);
+        if (exiftool.status != 0)
+        {
+            Metadata result;
+            return result;
+        }
+
+        version (unittest) {
+            return Metadata.init;
+        }
+        else
+        {
+            import mir.deser.json : deserializeJson;
+            writeln(exiftool.output);
+            auto result = deserializeJson!(Metadata[])(exiftool.output);
+            return result[0];
+        }
+    }
+}
 class Files
 {
     public ImageFile[] files;
@@ -381,7 +426,7 @@ void drawRect(Image* image, int x, int y, int width, int height, ref RGBA color)
         image.setPixel(i, y+height-1, color);
     }
 }
-void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
+void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFaces)
 {
     try
     {
@@ -404,7 +449,7 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
                                     "Image with filler bytes at the end of a row", loadDuration);
         }
 
-        if (showFaces)
+        if (renderFaces)
         {
             foreach (index, face; nextFile.faces)
             {
@@ -460,9 +505,9 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool showFaces)
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile, bool showFaces)
+void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile, bool renderFaces)
 {
-    loadNextImage(ownerTid, windowSize, cast() nextFile, showFaces);
+    loadNextImage(ownerTid, windowSize, cast() nextFile, renderFaces);
 }
 
 // maps from album://string to filename
@@ -607,7 +652,8 @@ void runDeepface(immutable(ImageFile)[] files, Args args)
 
 public void viewedMain(Args args)
 {
-    args.directory.expandTilde;
+    args.deepfaceIdentities = args.deepfaceIdentities.expandTilde;
+    args.directory = args.directory.expandTilde;
     vec2 currentImageDimension;
     long currentLoadDuration;
     string currentError;
@@ -618,6 +664,10 @@ public void viewedMain(Args args)
     state.update(files, args);
     string progress = "Scanning for stuff";
     bool showFaces = false;
+    bool renderFaces = false;
+    bool showMetadata = false;
+    bool showTags = false;
+    bool showBasicInfo = false;
 
     auto deepface = spawnLinked(&runDeepface, cast(immutable)files.files, args);
 
@@ -782,7 +832,7 @@ public void viewedMain(Args args)
                     &loadNextImageSpawnable,
                     vec2(window.width, window.height),
                     cast(shared)currentImage,
-                    showFaces,
+                    renderFaces,
                 );
                 // dfmt on
             }
@@ -813,68 +863,93 @@ public void viewedMain(Args args)
                             xPos += width;
                             auto imageFile = files.front;
                             auto imageFileName = imageFile.file;
-                            gui.label("Filename:");
-                            gui.value(imageFileName);
-                            gui.separatorLine();
-                            gui.label("Filesize:");
-
-                            gui.value(imageFileName.getSize.formatBigNumber);
-                            gui.separatorLine();
-                            if (!currentImageDimension.x.isNaN)
+                            if (gui.collapse("Basic info", "", &showBasicInfo))
                             {
-                                gui.label("Dimension:");
-                                gui.value(currentImageDimension.to!string);
+                                gui.label("Filename:");
+                                gui.value(imageFileName);
                                 gui.separatorLine();
-                                gui.label("Pixels:");
-                                gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
-                                          .formatBigNumber);
+                                gui.label("Filesize:");
+                                gui.value(imageFileName.getSize.formatBigNumber);
                                 gui.separatorLine();
-                            }
-                            if (currentError.length)
-                            {
-                                gui.label("Error:");
-                                gui.value(currentError);
-                                gui.separatorLine();
-                            }
-                            gui.label("Load duration:");
-                            gui.value(currentLoadDuration.to!string);
-                            gui.separatorLine();
-                            gui.label("Tags");
-                            foreach (tag; imageFile.tags)
-                            {
-                                gui.value(tag);
-                            }
-                            if (gui.textInput("New tag", newTag))
-                            {
-                                imageFile.addTag(newTag);
-                            }
-                            gui.separatorLine();
-                            if (imageFile.faces)
-                            {
-                                gui.label(format!("Faces %s (%s)")(imageFile.faces.length, imageFile.allNames));
-                                gui.checkbox("Show faces", &showFaces);
-                                foreach (index, face; imageFile.faces)
+                                if (!currentImageDimension.x.isNaN)
                                 {
-                                    auto color = colors[index%colors.length];
-                                    if (face.name)
+                                    gui.label("Dimension:");
+                                    gui.value(currentImageDimension.to!string);
+                                    gui.separatorLine();
+                                    gui.label("Pixels:");
+                                    gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                                              .formatBigNumber);
+                                    gui.separatorLine();
+                                }
+                                if (currentError.length)
+                                {
+                                    gui.label("Error:");
+                                    gui.value(currentError);
+                                    gui.separatorLine();
+                                }
+                                gui.label("Load duration:");
+                                gui.value(currentLoadDuration.to!string);
+                            }
+                            if (gui.collapse("Tags", "", &showTags))
+                            {
+                                foreach (tag; imageFile.tags)
+                                {
+                                    gui.value(tag);
+                                }
+                                if (gui.textInput("New tag", newTag))
+                                {
+                                    imageFile.addTag(newTag);
+                                }
+                            }
+                            if (imageFile.hasMetadata())
+                            {
+                                if (gui.collapse("Metadata", "", &showMetadata))
+                                {
+                                    auto metadata = imageFile.getMetadata();
+
+                                    import std.traits : FieldNameTuple;
+                                    static foreach (fieldName; FieldNameTuple!(Metadata))
                                     {
-                                        string newTag = face.name.tag;
-                                        if (!imageFile.hasTag(newTag))
+                                        static foreach (attribute; __traits(getAttributes, __traits(getMember, metadata, fieldName)))
                                         {
-                                            facesColorScheme.button.text = color;
-                                            if (gui.button("Add tag " ~ newTag, Enabled.yes, facesColorScheme))
+                                            static if (is(typeof(attribute) == string))
                                             {
-                                                imageFile.addTag(newTag);
+                                                gui.label(attribute);
+                                                gui.value(__traits(getMember, metadata, fieldName));
                                             }
                                         }
                                     }
-                                        else
-                                        {
-                                            facesColorScheme.label.text = color;
-                                            gui.label("Unknown face", facesColorScheme);
-                                        }
                                 }
-                                gui.separatorLine();
+                            }
+                            if (gui.collapse("Faces", "", &showFaces))
+                            {
+                                if (imageFile.faces)
+                                {
+                                    gui.label(format!("Faces %s (%s)")(imageFile.faces.length, imageFile.allNames));
+                                    gui.checkbox("Show faces", &renderFaces);
+                                    foreach (index, face; imageFile.faces)
+                                    {
+                                        auto color = colors[index%colors.length];
+                                        if (face.name)
+                                        {
+                                            string newTag = face.name.tag;
+                                            if (!imageFile.hasTag(newTag))
+                                            {
+                                                facesColorScheme.button.text = color;
+                                                if (gui.button("Add tag " ~ newTag, Enabled.yes, facesColorScheme))
+                                                {
+                                                    imageFile.addTag(newTag);
+                                                }
+                                            }
+                                        }
+                                            else
+                                            {
+                                                facesColorScheme.label.text = color;
+                                                gui.label("Unknown face", facesColorScheme);
+                                            }
+                                    }
+                                    gui.separatorLine();
+                                }
                             }
                         });
                 }
@@ -984,14 +1059,14 @@ public void viewedMain(Args args)
                                       files.popBack;
                                       state = state.updateAndStore(files, args);
                                       (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front, showFaces);
+                                                                           window.height), cast(shared) files.front, renderFaces);
                                       imageChangedExternally = true;
                                   });
                               gui.hotKey(['n', ' ', 262], () {
                                       files.popFront;
                                       state = state.updateAndStore(files, args);
                                       (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front, showFaces);
+                                                                           window.height), cast(shared) files.front, renderFaces);
                                       imageChangedExternally = true;
                                   });
                               // gui hotkeys
@@ -1041,7 +1116,7 @@ public void viewedMain(Args args)
                                      break;
                                  }
                              }, (Window w, uint code) { w.unicode = code; });
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front, showFaces);
+    loadNextImage(thisTid, vec2(window.width, window.height), files.front, renderFaces);
 
     Visitor renderVisitor = new RenderVisitor(window);
     Visitor imguiVisitor = new ImguiVisitor(window);

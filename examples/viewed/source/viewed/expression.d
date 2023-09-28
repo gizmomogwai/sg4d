@@ -152,13 +152,13 @@ Functions registerFunctions()
 @("expression parser") unittest
 {
     auto parser = new ExpressionParser(registerFunctions());
-    auto result = parser.expression.parse("(tag abc)");
+    auto result = parser.expression.parse("abc");
     result.success.should == true;
     ImageFile imageFile = new ImageFile("gibt nicht");
     imageFile.tags = ["abc"];
     result.results[0].get!Matcher.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(or (tag abc) (tag def))");
+    result = parser.expression.parse("(or abc def)");
     result.success.should == true;
     auto m = result.results[0].get!Matcher;
     imageFile.tags = ["abc"];
@@ -168,7 +168,7 @@ Functions registerFunctions()
     imageFile.tags = ["ghi"];
     m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(and (tag abc) (tag def))");
+    result = parser.expression.parse("(and abc def)");
     m = result.results[0].get!Matcher;
     imageFile.tags = ["abc"];
     m.matches(imageFile).should == false;
@@ -179,7 +179,7 @@ Functions registerFunctions()
     imageFile.tags = ["abc", "def", "ghi"];
     m.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(and (tag a) (or (tag b) (tag c)))");
+    result = parser.expression.parse("(and a (or b c))");
     result.success.should == true;
     m = result.results[0].get!Matcher;
     imageFile.tags= ["a", "b"];
@@ -191,7 +191,7 @@ Functions registerFunctions()
     imageFile.tags = ["a"];
     m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(not (tag a))");
+    result = parser.expression.parse("(not a)");
     result.success.should == true;
     m = result.results[0].get!Matcher;
     imageFile.tags = ["a"];
@@ -212,7 +212,7 @@ auto matcherForExpression(string s)
 @("parseExpression") unittest
 {
     ImageFile imageFile = new ImageFile("gibts nicht");
-    auto e = matcherForExpression("(tag abc)");
+    auto e = matcherForExpression("abc");
     imageFile.tags = ["abc", "def"];
     e.matches(imageFile).should == true;
     imageFile.tags = ["def"];
