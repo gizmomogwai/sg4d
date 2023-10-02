@@ -4,51 +4,47 @@ import bindbc.glfw : GLFW_RELEASE, GLFW_PRESS, GLFW_KEY_ENTER,
     GLFW_KEY_BACKSPACE, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_SLASH, GLFW_KEY_COMMA,
     GLFW_KEY_RIGHT, GLFW_KEY_LEFT, glfwWindowShouldClose, glfwSwapBuffers,
     glfwPollEvents, GLFW_KEY_ESCAPE;
-import btl.vector : Vector;
-import gamut : Image;
-import gamut.types : PixelType;
-import gl3n.linalg : vec2, vec3;
-import deepface : deepface, Face;
-import imgui.colorscheme : RGBA;
-import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
-
-
-version (unittest)
-{
-}
-else
-{
-    import mir.deser.json : deserializeJson;
-    import mir.ser.json : serializeJson;
-}
 import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
     IndexedInterleavedTriangleArray, GeometryData, Vertices, Appearance,
     ObserverData, Scene, Observer, Visitor, SceneData, VertexData, Node, PrintVisitor;
+import args : Args;
+import btl.vector : Vector;
+import core.time : Duration;
+import deepface : deepface, Face;
+import gamut : Image;
+import gamut.types : PixelType;
+import gl3n.linalg : vec2, vec3;
+import imagedb : shorten;
+import imgui.colorscheme : RGBA;
+import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp;
 import std.array : array, join, replace, split;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout, spawnLinked, LinkTerminated, OwnerTerminated;
 import std.conv : to;
+import std.datetime.stopwatch : StopWatch, AutoStart;
 import std.datetime.stopwatch;
+import std.datetime.systime : SysTime, Clock;
 import std.exception : enforce;
 import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists, getSize;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.path : dirName, expandTilde;
+import std.process : execute;
 import std.range : chunks, take, empty;
 import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
-import core.time : Duration;
-import std.datetime.stopwatch : StopWatch, AutoStart;
-import std.datetime.systime : SysTime, Clock;
-import args : Args;
 import viewed.expression;
-import imagedb : shorten;
 
 version (unittest)
 {
     import unit_threaded : should;
+}
+else
+{
+    import mir.deser.json : deserializeJson;
+    import mir.ser.json : serializeJson;
 }
 
 bool imageChangedExternally = false;
@@ -147,12 +143,10 @@ struct Metadata
 
      public static auto read(string file)
      {
-         import std.process : execute;
          auto exiftool = execute(["exiftool", "-json", file]);
          if (exiftool.status != 0)
          {
-             Metadata result;
-             return result;
+             return Metadata.init;
          }
 
          version (unittest) {
@@ -160,7 +154,6 @@ struct Metadata
          }
          else
          {
-             import mir.deser.json : deserializeJson;
              writeln(exiftool.output);
              auto result = deserializeJson!(Metadata[])(exiftool.output);
              return result[0];

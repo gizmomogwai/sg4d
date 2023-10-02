@@ -1,20 +1,20 @@
 module deepface;
 
 import std.process : pipeShell, Redirect, ProcessPipes;
-import std.string : format, strip, toStringz, replace;
-import std.array : split;
-import std.array : join;
-import std.regex : ctRegex, regex, matchAll;
-import gamut : Image, ImageFormat, PixelType;
-import std.conv : to;
-import std.path : buildPath, dirName;
 import args : Args;
+import gamut : Image, ImageFormat, PixelType;
 import imagedb : shorten;
-import std.stdio : File;
-import std.file : mkdirRecurse, exists, readText, write;
-import std.algorithm : map;
-import std.concurrency : initOnce;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
+import std.algorithm : map;
+import std.array : split, join;
+import std.concurrency : initOnce;
+import std.conv : to;
+import std.file : mkdirRecurse, exists, readText, write;
+import std.path : buildPath, dirName;
+import std.regex : ctRegex, regex, matchAll;
+import std.stdio : File, writeln;
+import std.string : format, strip, toStringz, replace;
+
 version (unittest)
 {
     import unit_threaded : should;
@@ -49,11 +49,11 @@ string calcIdentityName(string s, string suffix)
 @("calcIdentityName from path") unittest {
     "abc/ME/def".calcIdentityName("abc").should == "ME";
 }
+
 @serdeIgnoreUnexpectedKeys
 struct Face {
     @serdeKeys("file_name")
     string face;
-    //string rectangle;
     @serdeOptional
     string name; /// null if not recognized
     Match[] match;
@@ -83,6 +83,7 @@ struct Region
     @serdeKeys("h")
     int height;
 }
+
 class DeepfaceProcess
 {
     __gshared DeepfaceProcess instance;
