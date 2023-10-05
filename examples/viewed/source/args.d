@@ -1,15 +1,19 @@
 module args;
 
-import argparse : NamedArgument;
+import argparse : NamedArgument, Parse;
+import thepath : Path;
 
 public struct Args
 {
-    @NamedArgument("deepfaceIdentities")
-    string deepfaceIdentities = "~/.config/viewed/deepfaceIdentities";
+    @(NamedArgument("deepfaceIdentities")
+      .Parse!((string s) {return Path(s);}))
+    Path deepfaceIdentities = Path("~/.config/viewed/deepfaceIdentities");
 
-    @NamedArgument("directory", "dir", "d")
-    string directory;
+    @(NamedArgument("directory", "dir", "d")
+      .Parse!((string s) {return Path(s);}))
+    Path directory;
 
-    @NamedArgument("album", "a")
-    string album;
+    @(NamedArgument("album", "a")
+      .Parse!((string s) {return Path(s);}))
+    Path album;
 }

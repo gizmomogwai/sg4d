@@ -151,10 +151,11 @@ Functions registerFunctions()
 
 @("expression parser") unittest
 {
+    import thepath : Path;
     auto parser = new ExpressionParser(registerFunctions());
     auto result = parser.expression.parse("abc");
     result.success.should == true;
-    ImageFile imageFile = new ImageFile("gibt nicht");
+    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
     imageFile.tags = ["abc"];
     result.results[0].get!Matcher.matches(imageFile).should == true;
 
@@ -211,7 +212,8 @@ auto matcherForExpression(string s)
 
 @("parseExpression") unittest
 {
-    ImageFile imageFile = new ImageFile("gibts nicht");
+    import thepath : Path;
+    ImageFile imageFile = new ImageFile(Path("gibts nicht"));
     auto e = matcherForExpression("abc");
     imageFile.tags = ["abc", "def"];
     e.matches(imageFile).should == true;

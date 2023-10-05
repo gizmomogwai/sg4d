@@ -10,10 +10,10 @@ import std.array : split, join;
 import std.concurrency : initOnce;
 import std.conv : to;
 import std.file : mkdirRecurse, exists, readText, write;
-import std.path : buildPath, dirName;
 import std.regex : ctRegex, regex, matchAll;
 import std.stdio : File, writeln;
 import std.string : format, strip, toStringz, replace;
+import thepath : Path;
 
 version (unittest)
 {
@@ -25,29 +25,21 @@ else
     import mir.ser.json : serializeJson;
 }
 
-string calcDeepfaceCachePath(string file, Args args)
+Path calcDeepfaceCachePath(Path file, Args args)
 {
     auto deepfaceDirectory =
-        args.directory ? args.directory.buildPath(".deepfaceCache") : args.album.dirName.buildPath(".deepfaceCache");
-    return deepfaceDirectory.buildPath(file.shorten(args));
+        args.directory != Path.init ? args.directory.join(".deepfaceCache") : args.album.parent.join(".deepfaceCache");
+    return deepfaceDirectory.join(file.shorten(args));
 }
 
-string calcIdentityName(string s, string suffix)
+auto calcIdentityName(string s, Path suffix)
 {
-    string h = s.replace(suffix ~ "/", "");
-    string result = "";
-    foreach (c; h)
-    {
-        if (c == '/')
-        {
-            break;
-        }
-        result ~= c;
-    }
-    return result;
+    auto h = s.replace(suffix.toString ~ "/", "");
+    return h.split("/")[0];
 }
+
 @("calcIdentityName from path") unittest {
-    "abc/ME/def".calcIdentityName("abc").should == "ME";
+    "abc/ME/def".calcIdentityName(Path("abc")).should == "ME";
 }
 
 @serdeIgnoreUnexpectedKeys
@@ -90,27 +82,29 @@ class DeepfaceProcess
 
     private ProcessPipes pipes;
 
-    public static auto getInstance(string identitiesPath)
+    public static auto getInstance(Path identitiesPath)
     {
         return initOnce!instance(new DeepfaceProcess(identitiesPath));
     }
 
-    private this(string identitiesPath)
+    private this(Path identitiesPath)
     {
         pipes = pipeShell("./mydeepface.py %s".format(identitiesPath), Redirect.stdin | Redirect.stdout);
     }
-    Face[] extractFaces(string file, Args args)
+    Face[] extractFaces(Path file, Args args)
     {
+        writeln(file);
         auto cachePath = file.calcDeepfaceCachePath(args);
         if (!cachePath.exists)
         {
-            cachePath.mkdirRecurse;
+            cachePath.mkdir(true);
         }
-        auto deepfaceCache = cachePath.buildPath("deepface.json");
+        writeln(1);
+        auto deepfaceCache = cachePath.join("deepface.json");
         string response;
         if (deepfaceCache.exists)
         {
-            response = deepfaceCache.readText;
+            response = deepfaceCache.readFileText();
         }
         else
         {
@@ -119,7 +113,7 @@ class DeepfaceProcess
             pipes.stdin.writeln(msg);
             pipes.stdin.flush();
             response = pipes.stdout.readln();
-            deepfaceCache.write(response);
+            deepfaceCache.writeFile(response);
         }
         writeln("Deepface info: ", response);
         version (unittest)
@@ -155,7 +149,7 @@ void finishDeepface(Args args)
     DeepfaceProcess.getInstance(args.deepfaceIdentities).finish;
 }
 
-Face[] deepface(string file, Args args)
+Face[] deepface(Path file, Args args)
 {
 
     return DeepfaceProcess

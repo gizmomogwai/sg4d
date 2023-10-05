@@ -30,12 +30,12 @@ import std.exception : enforce;
 import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists, getSize;
 import std.format : format;
 import std.math.traits : isNaN;
-import std.path : dirName, expandTilde;
 import std.process : execute;
 import std.range : chunks, take, empty;
 import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
 import viewed.expression;
+import thepath : Path;
 
 version (unittest)
 {
@@ -47,8 +47,7 @@ else
     import mir.ser.json : serializeJson;
 }
 
-bool imageChangedExternally = false;
-bool firstImage = true;
+bool imageChangedExternally = true;
 
 static RGBA[] colors =
     [
@@ -86,13 +85,13 @@ auto getProjection(float zoom)
 
 class ImageFile
 {
-    string file;
+    Path file;
     string[] tags;
     Face[] faces;
     string allNames;
     bool metadataRead;
     Metadata metadata;
-    this(string file)
+    this(Path file)
     {
         this.file = file;
         this.tags = file.loadTags();
@@ -141,9 +140,9 @@ struct Metadata
      @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
      string creationDate;
 
-     public static auto read(string file)
+     public static auto read(Path file)
      {
-         auto exiftool = execute(["exiftool", "-json", file]);
+         auto exiftool = execute(["exiftool", "-json", file.toString()]);
          if (exiftool.status != 0)
          {
              return Metadata.init;
@@ -169,16 +168,15 @@ class Files
     size_t currentIndex;
     enum IMAGE_PATTERN = "{*.jpg,*.png}";
     Face[] faces;
-    this(string directory)
+    this(Path directory)
     {
         // dfmt off
         files = directory
-            .expandTilde
-            .dirEntries(IMAGE_PATTERN, SpanMode.depth)
-            .filter!(f => f.to!string.find(".deepface").empty)
+            .walk(IMAGE_PATTERN, SpanMode.depth)
+            .filter!(f => f.toString().find(".deepface").empty)
             .array
             .sort
-            .map!(dirEntry => new ImageFile(dirEntry.name))
+            .map!(entry => new ImageFile(entry))
             .array;
         // dfmt on
         runFilter();
@@ -191,17 +189,16 @@ class Files
         currentIndex = 0;
     }
 
-    this(string[] directories)
+    this(Path[] directories)
     {
         // dfmt off
         files = directories.map!(
             dir => dir
-            .expandTilde
-            .dirEntries(IMAGE_PATTERN, SpanMode.depth)
-            .filter!(f => f.to!string.find(".deepface").empty)
+            .walk(IMAGE_PATTERN, SpanMode.depth)
+            .filter!(f => f.toString().find(".deepface").empty)
             .array
             .sort
-            .map!(dirEntry => new ImageFile(dirEntry.name)))
+            .map!(entry => new ImageFile(entry)))
             .joiner
             .array;
         // dfmt on
@@ -274,9 +271,9 @@ class Files
         }
     }
 
-    void jumpTo(in string s)
+    void jumpTo(in Path s)
     {
-        const h = filteredFiles.countUntil!(v => v.file.to!string == s);
+        const h = filteredFiles.countUntil!(v => v.file == s);
         if (h != -1)
         {
             currentIndex = h;
@@ -298,20 +295,20 @@ class Files
     }
 }
 
-auto loadTags(string image)
+auto loadTags(Path image)
 {
-    auto propertiesFile = image ~ ".properties";
+    auto propertiesFile = Path(image.toString() ~ ".properties");
     if (propertiesFile.exists)
     {
-        return propertiesFile.readText.idup.loadJavaProperties;
+        return propertiesFile.readFileText.loadJavaProperties;
     }
     return null;
 }
 
-auto storeTags(string imageFile, string[] tags)
+auto storeTags(Path imageFile, string[] tags)
 {
-    auto propertiesFile = imageFile ~ ".properties";
-    propertiesFile.write(tags.toJavaProperties());
+    auto propertiesFile = Path(imageFile.toString() ~ ".properties");
+    propertiesFile.writeFile(tags.toJavaProperties());
 }
 string[] loadJavaProperties(string content)
 {
@@ -340,14 +337,14 @@ string toJavaProperties(string[] tags)
     ["a", "b", "c"].toJavaProperties.should == "a=true\nb=true\nc=true\n";
 }
 
-auto createTile(string filename, Image* i)
+auto createTile(Path file, Image* i)
 {
     // dfmt off
     Geometry geometry = IndexedInterleavedTriangleArray.make(
-        filename,
+        file.toString(),
         GeometryData.Type.ARRAY,
         Vertices.make(
-            filename,
+            file.toString(),
             VertexData.Components(
                 VertexData.Component.VERTICES,
                 VertexData.Component.TEXTURE_COORDINATES),
@@ -362,10 +359,10 @@ auto createTile(string filename, Image* i)
         [0u, 1u, 2u, 0u, 2u, 3u,],
     );
     return ShapeGroup.make(
-        filename,
+        file.toString(),
         geometry,
         Appearance.make(
-            filename,
+            file.toString(),
             "position_texture",
             Vector!(Texture).build(Texture.make(i))
         ),
@@ -426,7 +423,7 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFace
         const sw = StopWatch(AutoStart.yes);
 
         Image* image = new Image;
-        image.loadFromFile(nextFile.file);
+        image.loadFromFile(nextFile.file.toString());
         auto loadDuration = sw.peek.total!("msecs");
         // dfmt off
         writeln("Image %s load%sin %sms".format(
@@ -510,19 +507,19 @@ static class State
     string[string] indices;
     auto key(Args args)
     {
-        return args.album.length > 0 ? "album://" ~ args.album : "directory://" ~ args
+        return args.album != Path.init ? "album://" ~ args.album : "directory://" ~ args
             .directory;
     }
 
     auto updateAndStore(Files files, Args args)
     {
-        indices[key(args)] = files.front.file;
+        indices[key(args)] = files.front.file.toString;
         version (unittest)
         {
         }
         else
         {
-            stateFile.write(serializeJson(this));
+            stateFile.writeFile(serializeJson(this));
         }
         return this;
     }
@@ -532,7 +529,7 @@ static class State
         auto k = key(args);
         if (k in indices)
         {
-            files.jumpTo(indices[k]);
+            files.jumpTo(Path(indices[k]));
         }
     }
 }
@@ -544,7 +541,7 @@ auto getFiles(ref Args args)
     {
         writeln("getFiles took: %s".format(sw.peek));
     }
-    if (args.album.length > 0)
+    if (args.album != Path.init)
     {
         version (unittest)
         {
@@ -553,11 +550,14 @@ auto getFiles(ref Args args)
         else
         {
             args.album = args.album.expandTilde;
-            string[] directories = args.album
-                .readText
+            // dfmt off
+            auto directories = args
+                .album
+                .readFileText
                 .deserializeJson!(string[])
-                .map!(d => "%s/%s".format(args.album.dirName, d))
+                .map!(d => args.album.parent.join(d))
                 .array;
+            // dfmt on
             return new Files(directories);
         }
     }
@@ -570,7 +570,7 @@ auto getFiles(ref Args args)
 
 auto stateFile()
 {
-    return "~/.config/viewed/state.json".expandTilde;
+    return Path("~/.config/viewed/state.json");
 }
 
 auto readStatefile()
@@ -583,10 +583,11 @@ auto readStatefile()
     {
         try
         {
-            return stateFile().readText().deserializeJson!(State);
+            return stateFile().readFileText().deserializeJson!(State);
         }
         catch (Exception e)
         {
+            writeln(e);
             return new State();
         }
     }
@@ -630,8 +631,6 @@ void runDeepface(immutable(ImageFile)[] files, Args args)
 
 public void viewedMain(Args args)
 {
-    args.deepfaceIdentities = args.deepfaceIdentities.expandTilde;
-    args.directory = args.directory.expandTilde;
     vec2 currentImageDimension;
     long currentLoadDuration;
     string currentError;
@@ -655,7 +654,6 @@ public void viewedMain(Args args)
     observer.get.setPosition(vec3(0, 0, 100));
     scene.get.addChild(observer);
     import imgui : ScrollAreaContext;
-
     ScrollAreaContext viewedGui;
     ScrollAreaContext filterGui;
     ScrollAreaContext fileList;
@@ -743,7 +741,7 @@ public void viewedMain(Args args)
             this(Window window)
             {
                 this.window = window;
-                gui = new ImGui("~/.config/viewed/font.ttf".expandTilde);
+                gui = new ImGui(Path("~/.config/viewed/font.ttf").expandTilde().toString());
                 ColorScheme h = defaultColorScheme;
                 h.textInput.back = RGBA(255, 0, 0, 255);
                 h.textInput.backDisabled = RGBA(255, 0, 0, 255);
@@ -781,11 +779,10 @@ public void viewedMain(Args args)
                                        foreach (file; files.filteredFiles)
                                        {
                                            const active = file == files.front;
-                                           if ((imageChangedExternally || firstImage) && active)
+                                           if (imageChangedExternally && active)
                                            {
                                                gui.revealNextElement(fileList);
                                                imageChangedExternally = false;
-                                               firstImage = false;
                                            }
                                            // dfmt off
                                            const shortenedFilename = file.file.shorten(args);
@@ -844,7 +841,7 @@ public void viewedMain(Args args)
                             if (gui.collapse("Basic info", "", &showBasicInfo))
                             {
                                 gui.label("Filename:");
-                                gui.value(imageFileName);
+                                gui.value(imageFileName.toString());
                                 gui.separatorLine();
                                 gui.label("Filesize:");
                                 gui.value(imageFileName.getSize.formatBigNumber);
