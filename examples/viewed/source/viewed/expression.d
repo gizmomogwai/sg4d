@@ -95,7 +95,7 @@ class ExpressionParser
     StringParser functionCall()
     {
         return (regex("\\s*\\(\\s*",
-                      false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
+                false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
                 data) {
             return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
         };
@@ -152,6 +152,7 @@ Functions registerFunctions()
 @("expression parser") unittest
 {
     import thepath : Path;
+
     auto parser = new ExpressionParser(registerFunctions());
     auto result = parser.expression.parse("abc");
     result.success.should == true;
@@ -183,11 +184,11 @@ Functions registerFunctions()
     result = parser.expression.parse("(and a (or b c))");
     result.success.should == true;
     m = result.results[0].get!Matcher;
-    imageFile.tags= ["a", "b"];
+    imageFile.tags = ["a", "b"];
     m.matches(imageFile).should == true;
     imageFile.tags = ["a", "c"];
     m.matches(imageFile).should == true;
-    imageFile.tags= ["c"];
+    imageFile.tags = ["c"];
     m.matches(imageFile).should == false;
     imageFile.tags = ["a"];
     m.matches(imageFile).should == false;
@@ -197,7 +198,7 @@ Functions registerFunctions()
     m = result.results[0].get!Matcher;
     imageFile.tags = ["a"];
     m.matches(imageFile).should == false;
-    imageFile.tags= ["a", "b"];
+    imageFile.tags = ["a", "b"];
     m.matches(imageFile).should == false;
     imageFile.tags = ["b"];
     m.matches(imageFile).should == true;
@@ -213,6 +214,7 @@ auto matcherForExpression(string s)
 @("parseExpression") unittest
 {
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
     auto e = matcherForExpression("abc");
     imageFile.tags = ["abc", "def"];

@@ -27,8 +27,8 @@ else
 
 Path calcDeepfaceCachePath(Path file, Args args)
 {
-    auto deepfaceDirectory =
-        args.directory != Path.init ? args.directory.join(".deepfaceCache") : args.album.parent.join(".deepfaceCache");
+    auto deepfaceDirectory = args.directory != Path.init
+        ? args.directory.join(".deepfaceCache") : args.album.parent.join(".deepfaceCache");
     return deepfaceDirectory.join(file.shorten(args));
 }
 
@@ -38,16 +38,16 @@ auto calcIdentityName(string s, Path suffix)
     return h.split("/")[0];
 }
 
-@("calcIdentityName from path") unittest {
+@("calcIdentityName from path") unittest
+{
     "abc/ME/def".calcIdentityName(Path("abc")).should == "ME";
 }
 
-@serdeIgnoreUnexpectedKeys
-struct Face {
+@serdeIgnoreUnexpectedKeys struct Face
+{
     @serdeKeys("file_name")
     string face;
-    @serdeOptional
-    string name; /// null if not recognized
+    @serdeOptional string name; /// null if not recognized
     Match[] match;
     Region region;
     void calcName(Args args)
@@ -60,8 +60,7 @@ struct Face {
     }
 }
 
-@serdeIgnoreUnexpectedKeys
-struct Match
+@serdeIgnoreUnexpectedKeys struct Match
 {
     string identity;
 }
@@ -89,8 +88,10 @@ class DeepfaceProcess
 
     private this(Path identitiesPath)
     {
-        pipes = pipeShell("./mydeepface.py %s".format(identitiesPath), Redirect.stdin | Redirect.stdout);
+        pipes = pipeShell("./mydeepface.py %s".format(identitiesPath),
+                Redirect.stdin | Redirect.stdout);
     }
+
     Face[] extractFaces(Path file, Args args)
     {
         writeln(file);
@@ -134,6 +135,7 @@ class DeepfaceProcess
             return faces;
         }
     }
+
     void finish()
     {
         pipes.stdin.writeln("quit");
@@ -152,7 +154,5 @@ void finishDeepface(Args args)
 Face[] deepface(Path file, Args args)
 {
 
-    return DeepfaceProcess
-        .getInstance(args.deepfaceIdentities)
-        .extractFaces(file, args);
+    return DeepfaceProcess.getInstance(args.deepfaceIdentities).extractFaces(file, args);
 }

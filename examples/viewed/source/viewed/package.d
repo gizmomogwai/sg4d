@@ -20,12 +20,12 @@ import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
 import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp;
-import std.array : array, join, replace, split;
-import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout, spawnLinked, LinkTerminated, OwnerTerminated;
-import std.conv : to;
-import std.datetime.stopwatch : StopWatch, AutoStart;
-import std.datetime.stopwatch;
+import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout,
+    spawnLinked, LinkTerminated, OwnerTerminated;
+import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
 import std.datetime.systime : SysTime, Clock;
+import std.conv : to;
+import std.array : array, join;
 import std.exception : enforce;
 import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists, getSize;
 import std.format : format;
@@ -36,6 +36,7 @@ import std.regex : replaceFirst, regex;
 import std.stdio : writeln;
 import viewed.expression;
 import thepath : Path;
+import viewed.tags : identityTag, loadTags, storeTags;
 
 version (unittest)
 {
@@ -47,22 +48,7 @@ else
     import mir.ser.json : serializeJson;
 }
 
-bool imageChangedExternally = true;
-
-static RGBA[] colors =
-    [
-        RGBA(255, 0,   0,   128),
-        RGBA(255, 255, 0,   128),
-        RGBA(0,   255, 0,   128),
-        RGBA(0,   255, 255, 128),
-        RGBA(0,     0, 255, 128),
-        RGBA(255,   0, 255, 128),
-    ];
-
-string tag(string s)
-{
-    return format!("identity:%s")(s);
-}
+auto getProjection(float zoom) => new ParallelProjection(1, 1000, zoom);
 
 string formatBigNumber(T)(const T number)
 {
@@ -75,12 +61,6 @@ string formatBigNumber(T)(const T number)
     spec.separatorChar = '.';
     buffer.formatValue(number, spec);
     return buffer[];
-}
-
-
-auto getProjection(float zoom)
-{
-    return new ParallelProjection(1, 1000, zoom);
 }
 
 class ImageFile
@@ -106,19 +86,25 @@ class ImageFile
             file.storeTags(tags);
         }
     }
+
     bool hasTag(string tag)
     {
         return !tags.find(tag).empty;
     }
+
     auto deepface(Args args) const
     {
         return file.deepface(args);
     }
+
     void setFaces(Face[] faces)
     {
         this.faces = faces;
-        this.allNames = faces.filter!(f => f.name).map!(f => f.name).join(", ");
+        this.allNames = faces.filter!(f => f.name)
+            .map!(f => f.name)
+            .join(", ");
     }
+
     bool hasMetadata()
     {
         if (metadataRead == false)
@@ -128,37 +114,39 @@ class ImageFile
         }
         return metadata != Metadata.init;
     }
+
     auto getMetadata()
     {
         return metadata;
     }
 }
 
-@serdeIgnoreUnexpectedKeys
-struct Metadata
- {
-     @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
-     string creationDate;
+@serdeIgnoreUnexpectedKeys struct Metadata
+{
+    @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
+    string creationDate;
 
-     public static auto read(Path file)
-     {
-         auto exiftool = execute(["exiftool", "-json", file.toString()]);
-         if (exiftool.status != 0)
-         {
-             return Metadata.init;
-         }
+    public static auto read(Path file)
+    {
+        auto exiftool = execute(["exiftool", "-json", file.toString()]);
+        if (exiftool.status != 0)
+        {
+            return Metadata.init;
+        }
 
-         version (unittest) {
-             return Metadata.init;
-         }
-         else
-         {
-             writeln(exiftool.output);
-             auto result = deserializeJson!(Metadata[])(exiftool.output);
-             return result[0];
-         }
-     }
+        version (unittest)
+        {
+            return Metadata.init;
+        }
+        else
+        {
+            writeln(exiftool.output);
+            auto result = deserializeJson!(Metadata[])(exiftool.output);
+            return result[0];
+        }
+    }
 }
+
 class Files
 {
     public ImageFile[] files;
@@ -194,11 +182,12 @@ class Files
         // dfmt off
         files = directories.map!(
             dir => dir
-            .walk(IMAGE_PATTERN, SpanMode.depth)
-            .filter!(f => f.toString().find(".deepface").empty)
-            .array
-            .sort
-            .map!(entry => new ImageFile(entry)))
+                .walk(IMAGE_PATTERN, SpanMode.depth)
+                .filter!(f => f.toString().find(".deepface").empty)
+                .array
+                .sort
+                .map!(entry => new ImageFile(entry))
+            )
             .joiner
             .array;
         // dfmt on
@@ -215,7 +204,8 @@ class Files
         }
         else
         {
-            try {
+            try
+            {
                 auto matcher = filter.matcherForExpression;
                 filteredFiles = files.filter!(f => matcher.matches(f)).array;
                 filterState = true;
@@ -285,56 +275,16 @@ class Files
         auto current = front;
         runFilter();
         currentIndex = filteredFiles.countUntil(current);
-        if (currentIndex == -1) {
+        if (currentIndex == -1)
+        {
             currentIndex = 0;
         }
     }
+
     void updateImage(ulong index, immutable(Face)[] faces)
     {
-        files[index].setFaces(cast(Face[])faces);
+        files[index].setFaces(cast(Face[]) faces);
     }
-}
-
-auto loadTags(Path image)
-{
-    auto propertiesFile = Path(image.toString() ~ ".properties");
-    if (propertiesFile.exists)
-    {
-        return propertiesFile.readFileText.loadJavaProperties;
-    }
-    return null;
-}
-
-auto storeTags(Path imageFile, string[] tags)
-{
-    auto propertiesFile = Path(imageFile.toString() ~ ".properties");
-    propertiesFile.writeFile(tags.toJavaProperties());
-}
-string[] loadJavaProperties(string content)
-{
-    return content
-        .split("\n")
-        .map!(line => line.split("="))
-        .filter!(keyValue => keyValue.length == 2 && keyValue[1] == "true")
-        .map!(keyValue => keyValue[0])
-        .array
-        ;
-}
-
-@("load java properties") unittest
-{
-    "iotd=true\n".loadJavaProperties.should == ["iotd"];
-    "iotd=true\niotd2=true\n".loadJavaProperties.should == ["iotd", "iotd2"];
-    "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
-}
-
-string toJavaProperties(string[] tags)
-{
-    return tags.map!(t => "%s=true".format(t)).joiner("\n").to!string ~"\n";
-}
-@("convert to java properties") unittest
-{
-    ["a", "b", "c"].toJavaProperties.should == "a=true\nb=true\nc=true\n";
 }
 
 auto createTile(Path file, Image* i)
@@ -384,39 +334,41 @@ class LoadException : Exception
 
 void setPixel(Image* image, int x, int y, ref RGBA color)
 {
-    ubyte[] bytes = cast(ubyte[])image.scanline(y);
-    const reminder = 255-color.a;
+    ubyte[] bytes = cast(ubyte[]) image.scanline(y);
+    const reminder = 255 - color.a;
     if (image.type == PixelType.rgb8)
     {
-        const idx = x*3;
-        bytes[idx+0] = cast(ubyte)((bytes[idx+0]*reminder + color.r*color.a)/255);
-        bytes[idx+1] = cast(ubyte)((bytes[idx+1]*reminder + color.g*color.a)/255);
-        bytes[idx+2] = cast(ubyte)((bytes[idx+2]*reminder + color.b*color.a)/255);
+        const idx = x * 3;
+        bytes[idx + 0] = cast(ubyte)((bytes[idx + 0] * reminder + color.r * color.a) / 255);
+        bytes[idx + 1] = cast(ubyte)((bytes[idx + 1] * reminder + color.g * color.a) / 255);
+        bytes[idx + 2] = cast(ubyte)((bytes[idx + 2] * reminder + color.b * color.a) / 255);
     }
     else if (image.type == PixelType.rgba8)
     {
-        const idx = x*4;
-        bytes[idx+0] = cast(ubyte)((bytes[idx+0]*reminder + color.r*color.a)/255);
-        bytes[idx+1] = cast(ubyte)((bytes[idx+1]*reminder + color.g*color.a)/255);
-        bytes[idx+2] = cast(ubyte)((bytes[idx+2]*reminder + color.b*color.a)/255);
-        bytes[idx+3] = cast(ubyte)((bytes[idx+3]*reminder + color.a*color.a)/255);
-        throw new Exception("fuck off");
+        const idx = x * 4;
+        bytes[idx + 0] = cast(ubyte)((bytes[idx + 0] * reminder + color.r * color.a) / 255);
+        bytes[idx + 1] = cast(ubyte)((bytes[idx + 1] * reminder + color.g * color.a) / 255);
+        bytes[idx + 2] = cast(ubyte)((bytes[idx + 2] * reminder + color.b * color.a) / 255);
+        bytes[idx + 3] = cast(ubyte)((bytes[idx + 3] * reminder + color.a * color.a) / 255);
     }
 }
+
 void drawRect(Image* image, int x, int y, int width, int height, ref RGBA color)
 {
-    for (int j=y; j<y+height; ++j)
+    for (int j = y; j < y + height; ++j)
     {
         image.setPixel(x, j, color);
-        image.setPixel(x+width-1, j, color);
+        image.setPixel(x + width - 1, j, color);
     }
-    for (int i=x+1; i<x+width-1; ++i)
+    for (int i = x + 1; i < x + width - 1; ++i)
     {
         image.setPixel(i, y, color);
-        image.setPixel(i, y+height-1, color);
+        image.setPixel(i, y + height - 1, color);
     }
 }
-void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFaces)
+
+void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFaces,
+        immutable(RGBA[]) colors)
 {
     try
     {
@@ -426,24 +378,28 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFace
         image.loadFromFile(nextFile.file.toString());
         auto loadDuration = sw.peek.total!("msecs");
         // dfmt off
-        writeln("Image %s load%sin %sms".format(
+        writeln(format!("Image %s load%sin %sms")(
                     nextFile.file,
                     image.isValid ? "ed sucessfully " : "ing failed ",
-                    loadDuration));
-        // dfmt on
-        image.isValid.enforce(new LoadException("Cannot read '%s' because %s".format(nextFile.file,
-                                                                                     image.errorMessage), image.errorMessage.to!string, loadDuration));
+                    loadDuration,
+                ));
+        image.isValid.enforce(new LoadException(format!("Cannot read '%s' because %s")(nextFile.file, image.errorMessage),
+                                                image.errorMessage.to!string,
+                                                loadDuration));
         if ((image.pitchInBytes != image.width * 3) && (image.pitchInBytes != image.width * 4))
         {
-            throw new LoadException("Image with filler bytes at the end of a row",
-                                    "Image with filler bytes at the end of a row", loadDuration);
+            throw new LoadException(
+                "Image with filler bytes at the end of a row",
+                "Image with filler bytes at the end of a row",
+                loadDuration);
         }
+        // dfmt on
 
         if (renderFaces)
         {
             foreach (index, face; nextFile.faces)
             {
-                RGBA color = colors[index%colors.length];
+                RGBA color = colors[index % colors.length];
                 color.a = ubyte(255);
                 // alpha = tagged -> 63, recognized -> 127, unknown -> 255
                 if (face.name)
@@ -451,38 +407,39 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFace
                     color.a /= 2;
                 }
 
-                if (face.name && nextFile.hasTag(face.name.tag))
+                if (face.name && nextFile.hasTag(face.name.identityTag()))
                 {
                     color.a /= 2;
                 }
-                image.drawRect(face.region.x, face.region.y, face.region.width, face.region.height, color);
+                image.drawRect(face.region.x, face.region.y, face.region.width,
+                        face.region.height, color);
             }
         }
         tid.send(cast(shared)(ObserverData o, ref vec2 currentImageDimension,
-                              ref float zoom, ref long currentLoadDuration) {
-                     try
-                     {
-                         currentLoadDuration = loadDuration;
-                         currentImageDimension = vec2(image.width, image.height);
+                ref float zoom, ref long currentLoadDuration) {
+            try
+            {
+                currentLoadDuration = loadDuration;
+                currentImageDimension = vec2(image.width, image.height);
 
-                         zoom = min(windowSize.x.to!float / currentImageDimension.x,
-                                    windowSize.y.to!float / currentImageDimension.y);
-                         o.setProjection(zoom.getProjection);
-                         Node newNode = createTile(nextFile.file, image);
-                         if (o.childs.length > 0)
-                         {
-                             o.replaceChild(0, newNode);
-                         }
-                         else
-                         {
-                             o.addChild(newNode);
-                         }
-                     }
-                     catch (Exception e)
-                     {
-                         writeln(e);
-                     }
-                 });
+                zoom = min(windowSize.x.to!float / currentImageDimension.x,
+                    windowSize.y.to!float / currentImageDimension.y);
+                o.setProjection(zoom.getProjection);
+                Node newNode = createTile(nextFile.file, image);
+                if (o.childs.length > 0)
+                {
+                    o.replaceChild(0, newNode);
+                }
+                else
+                {
+                    o.addChild(newNode);
+                }
+            }
+            catch (Exception e)
+            {
+                writeln(e);
+            }
+        });
 
     }
     catch (LoadException e)
@@ -495,20 +452,22 @@ void loadNextImage(Tid tid, vec2 windowSize, ImageFile nextFile, bool renderFace
     }
 }
 
-void loadNextImageSpawnable(vec2 windowSize, shared(ImageFile) nextFile, bool renderFaces)
-{
-    loadNextImage(ownerTid, windowSize, cast() nextFile, renderFaces);
-}
+// dfmt off
+void loadNextImageSpawnable(vec2 windowSize,
+                            shared(ImageFile) nextFile,
+                            bool renderFaces,
+                            immutable(RGBA[]) colors) => loadNextImage(ownerTid, windowSize, cast() nextFile, renderFaces, colors);
+// dfmt on
 
 // maps from album://string to filename
 // or from directory://string to filename
 static class State
 {
     string[string] indices;
+
     auto key(Args args)
     {
-        return args.album != Path.init ? "album://" ~ args.album : "directory://" ~ args
-            .directory;
+        return args.album != Path.init ? "album://" ~ args.album : "directory://" ~ args.directory;
     }
 
     auto updateAndStore(Files files, Args args)
@@ -568,10 +527,7 @@ auto getFiles(ref Args args)
     }
 }
 
-auto stateFile()
-{
-    return Path("~/.config/viewed/state.json");
-}
+auto stateFile() => Path("~/.config/viewed/state.json");
 
 auto readStatefile()
 {
@@ -603,27 +559,35 @@ immutable struct FacesFound
     ulong index;
     Face[] faces;
 }
+
 void runDeepface(immutable(ImageFile)[] files, Args args)
 {
     import deepface : deepface, finishDeepface;
-    try {
+
+    try
+    {
         import core.thread.osthread : Thread;
         import core.time : dur;
+
         ownerTid.send(DeepfaceProgress("Deepface: Started"));
         foreach (index, file; files)
         {
-            receiveTimeout(-1.msecs, ); // to get the owner terminated exception
-            ownerTid.send(DeepfaceProgress("Deepface: Working on %s (%s%%)".format(file.file.shorten(args), (index+1).to!float/files.length*100)));
-            try {
-                auto facesFound = FacesFound(index, cast(immutable)file.deepface(args));
+            receiveTimeout(-1.msecs,); // to get the owner terminated exception
+            ownerTid.send(DeepfaceProgress("Deepface: Working on %s (%s%%)".format(file.file.shorten(args),
+                    (index + 1).to!float / files.length * 100)));
+            try
+            {
+                auto facesFound = FacesFound(index, cast(immutable) file.deepface(args));
                 ownerTid.send(facesFound);
-            } catch (Exception e)
+            }
+            catch (Exception e)
             {
                 writeln(e);
             }
         }
         ownerTid.send(DeepfaceProgress("Deepface: Done"));
-    } catch (OwnerTerminated t)
+    }
+    catch (OwnerTerminated t)
     {
     }
     finishDeepface(args);
@@ -645,8 +609,20 @@ public void viewedMain(Args args)
     bool showMetadata = false;
     bool showTags = false;
     bool showBasicInfo = false;
+    bool imageChangedExternally = true; // true to handle showing of the first image
 
-    auto deepface = spawnLinked(&runDeepface, cast(immutable)files.files, args);
+    // dfmt off
+    immutable(RGBA[]) colors = [
+        RGBA(255, 0  ,   0, 128),
+        RGBA(255, 255,   0, 128),
+        RGBA(  0, 255,   0, 128),
+        RGBA(  0, 255, 255, 128),
+        RGBA(  0,   0, 255, 128),
+        RGBA(255,   0, 255, 128),
+    ];
+    // dfmt on
+
+    auto deepface = spawnLinked(&runDeepface, cast(immutable) files.files, args);
 
     auto scene = Scene.make("scene");
     auto projection = zoom.getProjection;
@@ -654,16 +630,12 @@ public void viewedMain(Args args)
     observer.get.setPosition(vec3(0, 0, 100));
     scene.get.addChild(observer);
     import imgui : ScrollAreaContext;
+
     ScrollAreaContext viewedGui;
     ScrollAreaContext filterGui;
     ScrollAreaContext fileList;
     ScrollAreaContext fileInfo;
     ScrollAreaContext stats;
-
-    auto clamp(float v, float minimum, float maximum)
-    {
-        return min(max(v, minimum), maximum);
-    }
 
     void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w)
     {
@@ -787,314 +759,311 @@ public void viewedMain(Args args)
                                            // dfmt off
                                            const shortenedFilename = file.file.shorten(args);
                                            // dfmt on
-                                           const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
-                                           if (gui.button(title, active ? Enabled.no : Enabled.yes))
-                                           {
-                                               files.select(file);
-                                               state = state.updateAndStore(files, args);
-                                               loadImage();
-                                           }
-                                       }
-                                   }, true, 2000);
+                    const title = "%s %s".format(active ? "-> " : "", shortenedFilename);
+                    if (gui.button(title, active ? Enabled.no : Enabled.yes))
+                    {
+                        files.select(file);
+                        state = state.updateAndStore(files, args);
+                        loadImage();
+                    }
                 }
-            }
-
-            private void loadImage()
-            {
-                // dfmt off
-                auto currentImage = files.front;
-                spawn(
-                    &loadNextImageSpawnable,
-                    vec2(window.width, window.height),
-                    cast(shared)currentImage,
-                    renderFaces,
-                );
-                // dfmt on
-            }
-
-            void renderStats(ref int xPos, ref int yPos, const int height)
-            {
-                if (stats.isVisible)
-                {
-                    xPos += BORDER;
-                    const width = window.width / 4;
-                    gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {}, () {
-                            xPos += width;
-                            gui.label("UI Rendertime:");
-                            gui.value(renderTime.total!("msecs")
-                                      .to!string);
-                            gui.separatorLine();
-                        });
-                }
-            }
-
-            void renderFileInfo(ref int xPos, ref int yPos, const int height)
-            {
-                if (fileInfo.isVisible)
-                {
-                    xPos += BORDER;
-                    const width = max(0, window.width - BORDER - xPos);
-                    gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {}, () {
-                            xPos += width;
-                            auto imageFile = files.front;
-                            auto imageFileName = imageFile.file;
-                            if (gui.collapse("Basic info", "", &showBasicInfo))
-                            {
-                                gui.label("Filename:");
-                                gui.value(imageFileName.toString());
-                                gui.separatorLine();
-                                gui.label("Filesize:");
-                                gui.value(imageFileName.getSize.formatBigNumber);
-                                gui.separatorLine();
-                                if (!currentImageDimension.x.isNaN)
-                                {
-                                    gui.label("Dimension:");
-                                    gui.value(currentImageDimension.to!string);
-                                    gui.separatorLine();
-                                    gui.label("Pixels:");
-                                    gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
-                                              .formatBigNumber);
-                                    gui.separatorLine();
-                                }
-                                if (currentError.length)
-                                {
-                                    gui.label("Error:");
-                                    gui.value(currentError);
-                                    gui.separatorLine();
-                                }
-                                gui.label("Load duration:");
-                                gui.value(currentLoadDuration.to!string);
-                            }
-                            if (gui.collapse("Tags", "", &showTags))
-                            {
-                                foreach (tag; imageFile.tags)
-                                {
-                                    gui.value(tag);
-                                }
-                                if (gui.textInput("New tag", newTag))
-                                {
-                                    imageFile.addTag(newTag);
-                                }
-                            }
-                            if (imageFile.hasMetadata())
-                            {
-                                if (gui.collapse("Metadata", "", &showMetadata))
-                                {
-                                    auto metadata = imageFile.getMetadata();
-
-                                    import std.traits : FieldNameTuple;
-                                    static foreach (fieldName; FieldNameTuple!(Metadata))
-                                    {
-                                        static foreach (attribute; __traits(getAttributes, __traits(getMember, metadata, fieldName)))
-                                        {
-                                            static if (is(typeof(attribute) == string))
-                                            {
-                                                gui.label(attribute);
-                                                gui.value(__traits(getMember, metadata, fieldName));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (imageFile.faces)
-                            {
-                                if (gui.collapse("Faces %s %s".format(imageFile.faces.length, imageFile.allNames ? "(%s)".format(imageFile.allNames) : ""), "blub", &showFaces))
-                                {
-                                    gui.checkbox("Show faces", &renderFaces);
-                                    foreach (index, face; imageFile.faces)
-                                    {
-                                        auto color = colors[index%colors.length];
-                                        if (face.name)
-                                        {
-                                            string newTag = face.name.tag;
-                                            if (!imageFile.hasTag(newTag))
-                                            {
-                                                facesColorScheme.button.text = color;
-                                                if (gui.button("Add tag " ~ newTag, Enabled.yes, facesColorScheme))
-                                                {
-                                                    imageFile.addTag(newTag);
-                                                }
-                                            }
-                                        }
-                                        else
-                                        {
-                                            facesColorScheme.label.text = color;
-                                            gui.label("Unknown face", facesColorScheme);
-                                        }
-                                    }
-                                    gui.separatorLine();
-                                }
-                            }
-                        });
-                }
-            } // renderFileInfo
-
-            void renderGui(ref int xPos, ref int yPos, ref int height)
-            {
-                if (viewedGui.isVisible)
-                {
-                    // dfmt off
-                    const scrollHeight = Sizes.SCROLL_AREA_HEADER
-                        + Sizes.SCROLL_AREA_PADDING
-                        + Sizes.SLIDER_HEIGHT
-                        + Sizes.DEFAULT_SPACING
-                        + Sizes.BUTTON_HEIGHT
-                        + Sizes.SCROLL_BAR_SIZE;
-                    // dfmt on
-                    gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
-                                   window.height - BORDER - scrollHeight,
-                                   window.width - 2 * BORDER, scrollHeight, () {}, () {
-                                       float oldZoom = zoom;
-                                       if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
-                                       {
-                                           zoomImage(window, currentImageDimension, oldZoom, zoom);
-                                       }
-                                       gui.label(progress);
-                                   }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
-                    height -= scrollHeight + BORDER;
-                }
-            }
-
-            override void visit(SceneData n)
-            {
-                const sw = StopWatch(AutoStart.yes);
-                int xPos = 0;
-                int yPos = BORDER;
-                int height = window.height - 2 * BORDER;
-                auto mouse = window.getMouseInfo();
-                auto scrollInfo = window.getAndResetScrollInfo();
-                gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
-                                    cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
-                          window.width, window.height, window.unicode, () {
-
-                              auto t = Clock.currTime;
-                              viewedGui.animate(t);
-                              fileList.animate(t);
-                              fileInfo.animate(t);
-                              stats.animate(t);
-
-                              renderGui(xPos, yPos, height);
-                              renderFileList(xPos, yPos, height);
-                              renderStats(xPos, yPos, height);
-                              renderFileInfo(xPos, yPos, height);
-
-                              //movement
-                              gui.hotKey('w', () {
-                                      move(0, 10, window, currentImageDimension, zoom);
-                                  });
-                              gui.hotKey('a', () {
-                                      move(-10, 0, window, currentImageDimension, zoom);
-                                  });
-                              gui.hotKey('s', () {
-                                      move(0, -10, window, currentImageDimension, zoom);
-                                  });
-                              gui.hotKey('d', () {
-                                      move(10, 0, window, currentImageDimension, zoom);
-                                  });
-                              gui.hotKey('+', () {
-                                      zoomImage(window, currentImageDimension, zoom, zoom + zoomDelta);
-                                  });
-                              gui.hotKey('-', () {
-                                      zoomImage(window, currentImageDimension, zoom, zoom - zoomDelta);
-                                  });
-                              gui.hotKey('1', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 / 16);
-                                  });
-                              gui.hotKey('2', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 / 8);
-                                  });
-                              gui.hotKey('3', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 / 4);
-                                  });
-                              gui.hotKey('4', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 / 3);
-                                  });
-                              gui.hotKey('5', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0);
-                                  });
-                              gui.hotKey('6', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 * 2);
-                                  });
-                              gui.hotKey('7', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 * 3);
-                                  });
-                              gui.hotKey('8', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 * 4);
-                                  });
-                              gui.hotKey('9', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 * 5);
-                                  });
-                              gui.hotKey('0', () {
-                                      zoomImage(window, currentImageDimension, zoom, 1.0 * 6);
-                                  });
-
-                              // image navigation
-                              gui.hotKey(['b', 263], () {
-                                      files.popBack;
-                                      state = state.updateAndStore(files, args);
-                                      (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front, renderFaces);
-                                      imageChangedExternally = true;
-                                  });
-                              gui.hotKey(['n', ' ', 262], () {
-                                      files.popFront;
-                                      state = state.updateAndStore(files, args);
-                                      (&loadNextImageSpawnable).spawn(vec2(window.width,
-                                                                           window.height), cast(shared) files.front, renderFaces);
-                                      imageChangedExternally = true;
-                                  });
-                              // gui hotkeys
-                              gui.hotKey('f', () { fileList.toggle(); });
-                              gui.hotKey('i', () { fileInfo.toggle(); });
-                              gui.hotKey(',', () { stats.toggle(); });
-                              gui.hotKey('g', () { viewedGui.toggle(); });
-                              // debug hotkey
-                              gui.hotKey('p', () { scene.get.accept(new PrintVisitor()); });
-                          });
-                import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
-                    GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
-
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                glDisable(GL_DEPTH_TEST);
-                gui.render();
-                renderTime = sw.peek;
-            }
+            }, true, 2000);
         }
     }
 
-    auto window = new Window("viewed", scene, 800, 600, (Window w, int key, int /+scancode+/ ,
-                                                         int action, int /+mods+/ ) {
-                                 if (action != GLFW_PRESS)
-                                 {
-                                     return;
-                                 }
-                                 switch (key)
-                                 {
-                                 case GLFW_KEY_ENTER:
-                                     w.unicode = 0x0d;
-                                     break;
-                                 case GLFW_KEY_BACKSPACE:
-                                     w.unicode = 0x08;
-                                     break;
-                                 case GLFW_KEY_RIGHT:
-                                     w.unicode = 262;
-                                     break;
-                                 case GLFW_KEY_LEFT:
-                                     w.unicode = 263;
-                                     break;
-                                 case GLFW_KEY_ESCAPE:
-                                     w.unicode = 0x27;
-                                     break;
-                                 default:
-                                     break;
-                                 }
-                             }, (Window w, uint code) { w.unicode = code; });
-    loadNextImage(thisTid, vec2(window.width, window.height), files.front, renderFaces);
+    private void loadImage()
+    {
+        // dfmt off
+        auto currentImage = files.front;
+        spawn(
+            &loadNextImageSpawnable,
+            vec2(window.width, window.height),
+            cast(shared)currentImage,
+            renderFaces,
+            colors,
+        );
+        // dfmt on
+    }
 
-    Visitor renderVisitor = new RenderVisitor(window);
-    Visitor imguiVisitor = new ImguiVisitor(window);
-    // dfmt off
+    void renderStats(ref int xPos, ref int yPos, const int height)
+    {
+        if (stats.isVisible)
+        {
+            xPos += BORDER;
+            const width = window.width / 4;
+            gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {}, () {
+                xPos += width;
+                gui.label("UI Rendertime:");
+                gui.value(renderTime.total!("msecs")
+                    .to!string);
+                gui.separatorLine();
+            });
+        }
+    }
+
+    void renderFileInfo(ref int xPos, ref int yPos, const int height)
+    {
+        if (fileInfo.isVisible)
+        {
+            xPos += BORDER;
+            const width = max(0, window.width - BORDER - xPos);
+            gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {}, () {
+                xPos += width;
+                auto imageFile = files.front;
+                auto imageFileName = imageFile.file;
+                if (gui.collapse("Basic info", "", &showBasicInfo))
+                {
+                    gui.label("Filename:");
+                    gui.value(imageFileName.toString());
+                    gui.separatorLine();
+                    gui.label("Filesize:");
+                    gui.value(imageFileName.getSize.formatBigNumber);
+                    gui.separatorLine();
+                    if (!currentImageDimension.x.isNaN)
+                    {
+                        gui.label("Dimension:");
+                        gui.value(currentImageDimension.to!string);
+                        gui.separatorLine();
+                        gui.label("Pixels:");
+                        gui.value((currentImageDimension.x.to!int * currentImageDimension.y.to!int)
+                            .formatBigNumber);
+                        gui.separatorLine();
+                    }
+                    if (currentError.length)
+                    {
+                        gui.label("Error:");
+                        gui.value(currentError);
+                        gui.separatorLine();
+                    }
+                    gui.label("Load duration:");
+                    gui.value(currentLoadDuration.to!string);
+                }
+                if (gui.collapse("Tags", "", &showTags))
+                {
+                    foreach (tag; imageFile.tags)
+                    {
+                        gui.value(tag);
+                    }
+                    if (gui.textInput("New tag", newTag))
+                    {
+                        imageFile.addTag(newTag);
+                    }
+                }
+                if (imageFile.hasMetadata())
+                {
+                    if (gui.collapse("Metadata", "", &showMetadata))
+                    {
+                        auto metadata = imageFile.getMetadata();
+
+                        import std.traits : FieldNameTuple;
+
+                        static foreach (fieldName; FieldNameTuple!(Metadata))
+                        {
+                            static foreach (attribute; __traits(getAttributes,
+                                __traits(getMember, metadata, fieldName)))
+                            {
+                                static if (is(typeof(attribute) == string))
+                                {
+                                    gui.label(attribute);
+                                    gui.value(__traits(getMember, metadata, fieldName));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (imageFile.faces)
+                {
+                    if (gui.collapse("Faces %s %s".format(imageFile.faces.length,
+                        imageFile.allNames ? "(%s)".format(imageFile.allNames) : ""),
+                        "blub", &showFaces))
+                    {
+                        gui.checkbox("Show faces", &renderFaces);
+                        foreach (index, face; imageFile.faces)
+                        {
+                            auto color = colors[index % colors.length];
+                            if (face.name)
+                            {
+                                string newTag = face.name.identityTag();
+                                if (!imageFile.hasTag(newTag))
+                                {
+                                    facesColorScheme.button.text = color;
+                                    if (gui.button("Add tag " ~ newTag,
+                                        Enabled.yes, facesColorScheme))
+                                    {
+                                        imageFile.addTag(newTag);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                facesColorScheme.label.text = color;
+                                gui.label("Unknown face", facesColorScheme);
+                            }
+                        }
+                        gui.separatorLine();
+                    }
+                }
+            });
+        }
+    } // renderFileInfo
+
+    void renderGui(ref int xPos, ref int yPos, ref int height)
+    {
+        if (viewedGui.isVisible)
+        {
+            // dfmt off
+            const scrollHeight = Sizes.SCROLL_AREA_HEADER
+                + Sizes.SCROLL_AREA_PADDING
+                + Sizes.SLIDER_HEIGHT
+                + Sizes.DEFAULT_SPACING
+                + Sizes.BUTTON_HEIGHT
+                + Sizes.SCROLL_BAR_SIZE;
+            gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
+                           window.height - BORDER - scrollHeight,
+                           window.width - 2 * BORDER, scrollHeight,
+                           () {},
+                           () {
+                               float oldZoom = zoom;
+                               if (gui.slider("Zoom", &zoom, 0.1, 3, 0.005))
+                               {
+                                   zoomImage(window, currentImageDimension, oldZoom, zoom);
+                               }
+                               gui.label(progress);
+                           }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
+            // dfmt on
+            height -= scrollHeight + BORDER;
+        }
+    }
+
+    override void visit(SceneData n)
+    {
+        const sw = StopWatch(AutoStart.yes);
+        int xPos = 0;
+        int yPos = BORDER;
+        int height = window.height - 2 * BORDER;
+        auto mouse = window.getMouseInfo();
+        auto scrollInfo = window.getAndResetScrollInfo();
+        gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
+                cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
+                window.width, window.height, window.unicode, () {
+
+            auto t = Clock.currTime;
+            viewedGui.animate(t);
+            fileList.animate(t);
+            fileInfo.animate(t);
+            stats.animate(t);
+
+            renderGui(xPos, yPos, height);
+            renderFileList(xPos, yPos, height);
+            renderStats(xPos, yPos, height);
+            renderFileInfo(xPos, yPos, height);
+
+            void _move(int dx, int dy)
+            {
+                move(dx, dy, window, currentImageDimension, zoom);
+            }
+            gui.hotKey('w', () => _move(0 ,10));
+            gui.hotKey('a', () => _move(-10, 0));
+            gui.hotKey('s', () => _move(0, -10));
+            gui.hotKey('d', () => _move(10, 0));
+            void _zoom(float newZoom)
+            {
+                zoomImage(window, currentImageDimension, zoom, newZoom);
+            }
+            gui.hotKey('+', () => _zoom(zoom + zoomDelta));
+            gui.hotKey('-', () => _zoom(zoom - zoomDelta));
+            gui.hotKey('1', () => _zoom(1.0 / 16));
+            gui.hotKey('2', () => _zoom(1.0 / 8));
+            gui.hotKey('3', () => _zoom(1.0 / 4));
+            gui.hotKey('4', () => _zoom(1.0 / 3));
+            gui.hotKey('5', () => _zoom(1.0));
+            gui.hotKey('6', () => _zoom(1.0 * 2));
+            gui.hotKey('7', () => _zoom(1.0 * 3));
+            gui.hotKey('8', () => _zoom(1.0 * 4));
+            gui.hotKey('9', () => _zoom(1.0 * 5));
+            gui.hotKey('0', () => _zoom(1.0 * 6));
+
+            // image navigation
+            gui.hotKey(['b', 263], () {
+                files.popBack;
+                state = state.updateAndStore(files, args);
+                // dfmt off
+                                      spawn(
+                                          &loadNextImageSpawnable,
+                                          vec2(window.width, window.height),
+                                          cast(shared) files.front,
+                                          renderFaces,
+                                          colors,
+                                      );
+                                      // dfmt on
+                imageChangedExternally = true;
+            });
+            gui.hotKey(['n', ' ', 262], () {
+                files.popFront;
+                state = state.updateAndStore(files, args);
+                // dfmt off
+                                      spawn(
+                                          &loadNextImageSpawnable,
+                                          vec2(window.width, window.height),
+                                          cast(shared) files.front,
+                                          renderFaces,
+                                          colors,
+                                      );
+                                      // dfmt on
+                imageChangedExternally = true;
+            });
+            // gui hotkeys
+            gui.hotKey('f', () => fileList.toggle());
+            gui.hotKey('i', () => fileInfo.toggle());
+            gui.hotKey(',', () => stats.toggle());
+            gui.hotKey('g', () => viewedGui.toggle());
+            // debug hotkey
+            gui.hotKey('p', () => scene.get.accept(new PrintVisitor()));
+        });
+        import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
+            GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
+        gui.render();
+        renderTime = sw.peek;
+    }
+}
+}
+
+auto window = new Window("viewed", scene, 800, 600, (Window w, int key, int /+scancode+/ ,
+        int action, int /+mods+/ ) {
+    if (action != GLFW_PRESS)
+    {
+        return;
+    }
+    switch (key)
+    {
+    case GLFW_KEY_ENTER:
+        w.unicode = 0x0d;
+        break;
+    case GLFW_KEY_BACKSPACE:
+        w.unicode = 0x08;
+        break;
+    case GLFW_KEY_RIGHT:
+        w.unicode = 262;
+        break;
+    case GLFW_KEY_LEFT:
+        w.unicode = 263;
+        break;
+    case GLFW_KEY_ESCAPE:
+        w.unicode = 0x27;
+        break;
+    default:
+        break;
+    }
+}, (Window w, uint code) { w.unicode = code; });
+loadNextImage(thisTid, vec2(window.width, window.height), files.front, renderFaces, colors);
+
+Visitor renderVisitor = new RenderVisitor(window);
+Visitor imguiVisitor = new ImguiVisitor(window);
+// dfmt off
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),
@@ -1102,19 +1071,19 @@ public void viewedMain(Args args)
     ];
     // dfmt on
 
-    while (!window.window.glfwWindowShouldClose())
+while (!window.window.glfwWindowShouldClose())
+{
+    foreach (visitor; visitors)
     {
-        foreach (visitor; visitors)
-        {
-            scene.get.accept(visitor);
-        }
+        scene.get.accept(visitor);
+    }
 
-        window.window.glfwSwapBuffers();
+    window.window.glfwSwapBuffers();
 
-        // poll glfw
-        glfwPollEvents();
-        // and scene graph "events"
-        // dfmt off
+    // poll glfw
+    glfwPollEvents();
+    // and scene graph "events"
+    // dfmt off
         receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
@@ -1145,5 +1114,5 @@ public void viewedMain(Args args)
                        },
         );
         // dfmt on
-    }
+}
 }
