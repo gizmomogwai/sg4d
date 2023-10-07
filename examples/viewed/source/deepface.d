@@ -5,8 +5,8 @@ import args : Args;
 import gamut : Image, ImageFormat, PixelType;
 import imagedb : shorten;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
-import std.algorithm : map;
-import std.array : split, join;
+import std.algorithm : map, filter;
+import std.array : split, join, array;
 import std.concurrency : initOnce;
 import std.conv : to;
 import std.file : mkdirRecurse, exists, readText, write;
@@ -45,6 +45,7 @@ auto calcIdentityName(string s, Path suffix)
 
 @serdeIgnoreUnexpectedKeys struct Face
 {
+    float confidence;
     @serdeKeys("file_name")
     string face;
     @serdeOptional string name; /// null if not recognized
@@ -127,7 +128,7 @@ class DeepfaceProcess
             {
                 return null;
             }
-            Face[] faces = deserializeJson!(Face[])(response);
+            Face[] faces = deserializeJson!(Face[])(response).filter!(f => f.confidence > 0.5f).array;
             foreach (ref face; faces)
             {
                 face.calcName(args);
