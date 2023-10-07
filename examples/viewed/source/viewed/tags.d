@@ -1,6 +1,6 @@
 module viewed.tags;
 
-import std.array : split, array;
+import std.array : split, array, join;
 import std.conv : to;
 import std.format : format;
 import thepath : Path;
@@ -10,21 +10,32 @@ string identityTag(string identity) => format!("identity:%s")(identity);
 
 auto loadTags(Path image)
 {
-    auto propertiesFile = Path(image.toString() ~ ".properties");
-    if (propertiesFile.exists)
+    auto tagsFile = Path(image.toString() ~ ".tags");
+    if (tagsFile.exists())
     {
-        return propertiesFile.readFileText.loadJavaProperties;
+        return tagsFile.readFileText.loadTagsFile();
+    }
+    auto propertiesFile = Path(image.toString() ~ ".properties");
+    if (propertiesFile.exists())
+    {
+        auto result = propertiesFile.readFileText.loadJavaProperties();
+        tagsFile.storeTags(result);
+        return result;
     }
     return null;
 }
 
-auto storeTags(Path imageFile, string[] tags)
+auto storeTags(Path tagsFile, string[] tags)
 {
-    auto propertiesFile = Path(imageFile.toString() ~ ".properties");
-    propertiesFile.writeFile(tags.toJavaProperties());
+    tagsFile.writeFile(tags.toTagsFile());
 }
 
-auto loadJavaProperties(string content)
+private auto loadTagsFile(string content)
+{
+    return content.split(",").array;
+}
+
+private auto loadJavaProperties(string content)
 {
     return content.split("\n").map!(line => line.split("="))
         .filter!(keyValue => keyValue.length == 2 && keyValue[1] == "true")
@@ -37,6 +48,11 @@ auto loadJavaProperties(string content)
     "iotd=true\n".loadJavaProperties.should == ["iotd"];
     "iotd=true\niotd2=true\n".loadJavaProperties.should == ["iotd", "iotd2"];
     "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
+}
+
+string toTagsFile(string[] args)
+{
+    return args.join(",");
 }
 
 string toJavaProperties(string[] tags)

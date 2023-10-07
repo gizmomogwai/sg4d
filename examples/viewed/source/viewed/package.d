@@ -593,6 +593,32 @@ void runDeepface(immutable(ImageFile)[] files, Args args)
     finishDeepface(args);
 }
 
+void adjustAndSetPosition(scope Observer observer, vec2 newPosition,
+        vec2 imageDimension, float zoom, Window w)
+{
+    auto position = vec3(newPosition.x, newPosition.y, 100);
+    const scaledImage = imageDimension * zoom;
+
+    if (scaledImage.x <= w.getWidth)
+    {
+        position.x = (scaledImage.x - w.getWidth) / 2.0 / zoom;
+    }
+    else
+    {
+        position.x = position.x.clamp(0, imageDimension.x - w.getWidth / zoom);
+    }
+
+    if (scaledImage.y <= w.getHeight)
+    {
+        position.y = (scaledImage.y - w.getHeight) / 2.0 / zoom;
+    }
+    else
+    {
+        position.y = position.y.clamp(0, imageDimension.y - w.getHeight / zoom);
+    }
+    observer.get.setPosition(position);
+}
+
 public void viewedMain(Args args)
 {
     vec2 currentImageDimension;
@@ -637,31 +663,6 @@ public void viewedMain(Args args)
     ScrollAreaContext fileInfo;
     ScrollAreaContext stats;
 
-    void adjustAndSetPosition(vec2 newPosition, vec2 imageDimension, float zoom, Window w)
-    {
-        auto position = vec3(newPosition.x, newPosition.y, 100);
-        const scaledImage = imageDimension * zoom;
-
-        if (scaledImage.x <= w.getWidth)
-        {
-            position.x = (scaledImage.x - w.getWidth) / 2.0 / zoom;
-        }
-        else
-        {
-            position.x = clamp(position.x, 0, imageDimension.x - w.getWidth / zoom);
-        }
-
-        if (scaledImage.y <= w.getHeight)
-        {
-            position.y = (scaledImage.y - w.getHeight) / 2.0 / zoom;
-        }
-        else
-        {
-            position.y = clamp(position.y, 0, imageDimension.y - w.getHeight / zoom);
-        }
-        observer.get.setPosition(position);
-    }
-
     void zoomImage(Window w, vec2 imageDimension, float oldZoom, float newZoom)
     {
         zoom = newZoom;
@@ -672,13 +673,13 @@ public void viewedMain(Args args)
         const originalPosition = ((position * oldZoom) + (windowSize / 2.0)) / oldZoom;
         auto newPosition = ((originalPosition * newZoom) - windowSize / 2.0) / newZoom;
 
-        adjustAndSetPosition(newPosition, imageDimension, zoom, w);
+        observer.adjustAndSetPosition(newPosition, imageDimension, zoom, w);
     }
 
     void move(int dx, int dy, Window w, vec2 imageDimension, float zoom)
     {
         auto position = observer.get.getPosition.xy + vec2(dx, dy);
-        adjustAndSetPosition(position, imageDimension, zoom, w);
+        observer.adjustAndSetPosition(position, imageDimension, zoom, w);
     }
 
     version (Default)
@@ -946,7 +947,6 @@ public void viewedMain(Args args)
         gui.frame(MouseInfo(mouse.x, mouse.y, mouse.button,
                 cast(int) scrollInfo.xOffset, cast(int) scrollInfo.yOffset),
                 window.width, window.height, window.unicode, () {
-
             auto t = Clock.currTime;
             viewedGui.animate(t);
             fileList.animate(t);
@@ -958,18 +958,13 @@ public void viewedMain(Args args)
             renderStats(xPos, yPos, height);
             renderFileInfo(xPos, yPos, height);
 
-            void _move(int dx, int dy)
-            {
-                move(dx, dy, window, currentImageDimension, zoom);
-            }
-            gui.hotKey('w', () => _move(0 ,10));
+            void _move(int dx, int dy) => move(dx, dy, window, currentImageDimension, zoom);
+            gui.hotKey('w', () => _move(0, 10));
             gui.hotKey('a', () => _move(-10, 0));
             gui.hotKey('s', () => _move(0, -10));
             gui.hotKey('d', () => _move(10, 0));
-            void _zoom(float newZoom)
-            {
-                zoomImage(window, currentImageDimension, zoom, newZoom);
-            }
+
+            void _zoom(float newZoom) => zoomImage(window, currentImageDimension, zoom, newZoom);
             gui.hotKey('+', () => _zoom(zoom + zoomDelta));
             gui.hotKey('-', () => _zoom(zoom - zoomDelta));
             gui.hotKey('1', () => _zoom(1.0 / 16));
@@ -983,34 +978,21 @@ public void viewedMain(Args args)
             gui.hotKey('9', () => _zoom(1.0 * 5));
             gui.hotKey('0', () => _zoom(1.0 * 6));
 
+            void filesChanged()
+            {
+                state = state.updateAndStore(files, args);
+                spawn(&loadNextImageSpawnable, vec2(window.width,
+                window.height), cast(shared) files.front, renderFaces, colors,);
+                imageChangedExternally = true;
+            }
             // image navigation
             gui.hotKey(['b', 263], () {
                 files.popBack;
-                state = state.updateAndStore(files, args);
-                // dfmt off
-                                      spawn(
-                                          &loadNextImageSpawnable,
-                                          vec2(window.width, window.height),
-                                          cast(shared) files.front,
-                                          renderFaces,
-                                          colors,
-                                      );
-                                      // dfmt on
-                imageChangedExternally = true;
+                filesChanged();
             });
             gui.hotKey(['n', ' ', 262], () {
                 files.popFront;
-                state = state.updateAndStore(files, args);
-                // dfmt off
-                                      spawn(
-                                          &loadNextImageSpawnable,
-                                          vec2(window.width, window.height),
-                                          cast(shared) files.front,
-                                          renderFaces,
-                                          colors,
-                                      );
-                                      // dfmt on
-                imageChangedExternally = true;
+                filesChanged();
             });
             // gui hotkeys
             gui.hotKey('f', () => fileList.toggle());
@@ -1063,15 +1045,13 @@ loadNextImage(thisTid, vec2(window.width, window.height), files.front, renderFac
 
 Visitor renderVisitor = new RenderVisitor(window);
 Visitor imguiVisitor = new ImguiVisitor(window);
-// dfmt off
     auto visitors = [
         renderVisitor,
         new BehaviorVisitor(),
         imguiVisitor,
     ];
-    // dfmt on
 
-while (!window.window.glfwWindowShouldClose())
+    while (!window.window.glfwWindowShouldClose())
 {
     foreach (visitor; visitors)
     {
@@ -1081,9 +1061,9 @@ while (!window.window.glfwWindowShouldClose())
     window.window.glfwSwapBuffers();
 
     // poll glfw
-    glfwPollEvents();
-    // and scene graph "events"
-    // dfmt off
+        glfwPollEvents();
+        // and scene graph "events"
+        // dfmt off
         receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
@@ -1114,5 +1094,5 @@ while (!window.window.glfwWindowShouldClose())
                        },
         );
         // dfmt on
-}
+    }
 }

@@ -3,6 +3,7 @@
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
 * Ideas
+** TODO replace legacy iotd=true properties file
 ** DONE add filter to files list ...
 CLOSED: [2023-08-30 Wed 17:47]
 - CLOSING NOTE [2023-08-30 Wed 17:47]

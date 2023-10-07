@@ -18,7 +18,7 @@ import std.typecons : BitFlags;
 
 version (DEBUG_DESTRUCTORS)
 {
-    import core.stdc.stdio;
+    import core.stdc.stdio : printf;
 }
 
 alias CustomData = IntrusivePtr!CustomDataData;
