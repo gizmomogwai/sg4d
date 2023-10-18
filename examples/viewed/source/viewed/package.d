@@ -754,7 +754,7 @@ public void viewedMain(Args args)
                                            const active = file == files.front;
                                            if (imageChangedExternally && active)
                                            {
-                                               gui.revealNextElement(fileList);
+                                               gui.revealNextElement(fileList, 0.0);
                                                imageChangedExternally = false;
                                            }
                                            // dfmt off
