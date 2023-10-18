@@ -12,7 +12,7 @@
 		"dimgui": {"path":"../../../_d/external/dimgui"},
 		"dshould": "1.7.1",
 		"fswatch": "0.6.1",
-		"gamut": "2.1.4",
+		"gamut": "2.2.3",
 		"gl3n": "1.4.1",
 		"intel-intrinsics": "1.11.15",
 		"mir-algorithm": "3.21.0",
