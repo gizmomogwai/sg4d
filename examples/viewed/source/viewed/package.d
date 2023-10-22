@@ -619,6 +619,12 @@ void adjustAndSetPosition(scope Observer observer, vec2 newPosition,
     observer.get.setPosition(position);
 }
 
+void revealFile(ImageFile imageFile)
+{
+    auto result = ["open", "-R", imageFile.file.toAbsolute.toString].execute;
+    writeln(result);
+}
+
 public void viewedMain(Args args)
 {
     vec2 currentImageDimension;
@@ -999,6 +1005,7 @@ public void viewedMain(Args args)
             gui.hotKey('i', () => fileInfo.toggle());
             gui.hotKey(',', () => stats.toggle());
             gui.hotKey('g', () => viewedGui.toggle());
+            gui.hotKey('r', () => revealFile(files.front));
             // debug hotkey
             gui.hotKey('p', () => scene.get.accept(new PrintVisitor()));
         });
