@@ -32,6 +32,8 @@ def main():
         h = "["
         for index, face in enumerate(faces):
             face_file_name = f"{cache_path}/face-{index}.jpg"
+            if face["confidence"] < 0.1:
+                continue
             if h != "[":
                 h += ","
             h += "{\"confidence\":"
