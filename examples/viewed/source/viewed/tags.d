@@ -1,33 +1,46 @@
 module viewed.tags;
 
+import std.algorithm : map, filter, joiner;
 import std.array : split, array, join;
 import std.conv : to;
 import std.format : format;
+import std.range : empty;
 import thepath : Path;
-import std.algorithm : map, filter, joiner;
 
 string identityTag(string identity) => format!("identity:%s")(identity);
 
-auto loadTags(Path image)
+auto toTagsPath(Path imagePath)
 {
-    auto tagsFile = Path(image.toString() ~ ".tags");
-    if (tagsFile.exists())
+    return Path(imagePath.toString() ~ ".tags");
+}
+auto loadTags(Path imagePath)
+{
+    auto tagsPath = imagePath.toTagsPath();
+    if (tagsPath.exists())
     {
-        return tagsFile.readFileText.loadTagsFile();
+        return tagsPath.readFileText.loadTagsFile();
     }
-    auto propertiesFile = Path(image.toString() ~ ".properties");
+    auto propertiesFile = Path(imagePath.toString() ~ ".properties");
     if (propertiesFile.exists())
     {
         auto result = propertiesFile.readFileText.loadJavaProperties();
-        tagsFile.storeTags(result);
+        tagsPath.storeTags(result);
         return result;
     }
     return null;
 }
 
-auto storeTags(Path tagsFile, string[] tags)
+auto storeTags(Path imagePath, string[] tags)
 {
-    tagsFile.writeFile(tags.toTagsFile());
+    auto tagsPath = imagePath.toTagsPath();
+    if (tags.empty)
+    {
+        tagsPath.remove();
+    }
+    else
+    {
+        tagsPath.writeFile(tags.toTagsFileContent());
+    }
 }
 
 private auto loadTagsFile(string content)
@@ -50,7 +63,7 @@ private auto loadJavaProperties(string content)
     "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
 }
 
-string toTagsFile(string[] args)
+string toTagsFileContent(string[] args)
 {
     return args.join(",");
 }

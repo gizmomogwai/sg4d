@@ -10,7 +10,7 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
 import args : Args;
 import btl.vector : Vector;
 import core.time : Duration;
-import deepface : deepface, Face;
+import deepface : deepface, Face, calcDeepfaceCachePath, calcDeepfaceJsonPath;
 import gamut : Image;
 import gamut.types : PixelType;
 import gl3n.linalg : vec2, vec3;
@@ -19,7 +19,7 @@ import imgui.colorscheme : RGBA;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp, remove;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout,
     spawnLinked, LinkTerminated, OwnerTerminated;
 import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
@@ -87,6 +87,15 @@ class ImageFile
         }
     }
 
+    void removeTag(string tag)
+    {
+        if (hasTag(tag))
+        {
+            tags = tags.remove!(i => i == tag);
+            file.storeTags(tags);
+        }
+    }
+
     bool hasTag(string tag)
     {
         return !tags.find(tag).empty;
@@ -118,6 +127,18 @@ class ImageFile
     auto getMetadata()
     {
         return metadata;
+    }
+
+    auto storeFaceInfo(Args args)
+    {
+        Path deepfaceJson = file.calcDeepfaceCachePath(args).calcDeepfaceJsonPath();
+        Path newFile = deepfaceJson.withExt("new");
+        newFile.writeFile(serializeJson(faces));
+        auto result = ["mv", newFile.toString, deepfaceJson.toString].execute;
+        if (result.status != 0)
+        {
+            writeln("Cannot rename ", newFile, " to ", deepfaceJson);
+        }
     }
 }
 
@@ -849,7 +870,10 @@ public void viewedMain(Args args)
                 {
                     foreach (tag; imageFile.tags)
                     {
-                        gui.value(tag);
+                        if (gui.button(tag))
+                        {
+                            imageFile.removeTag(tag);
+                        }
                     }
                     if (gui.textInput("New tag", newTag))
                     {
@@ -882,10 +906,10 @@ public void viewedMain(Args args)
                 {
                     if (gui.collapse("Faces %s %s".format(imageFile.faces.length,
                         imageFile.allNames ? "(%s)".format(imageFile.allNames) : ""),
-                        "blub", &showFaces))
+                        "", &showFaces))
                     {
                         gui.checkbox("Show faces", &renderFaces);
-                        foreach (index, face; imageFile.faces)
+                        foreach (index, ref face; imageFile.faces)
                         {
                             auto color = colors[index % colors.length];
                             if (face.name)
@@ -898,7 +922,14 @@ public void viewedMain(Args args)
                                         Enabled.yes, facesColorScheme))
                                     {
                                         imageFile.addTag(newTag);
+                                        face.done = true;
+                                        imageFile.storeFaceInfo(args);
                                     }
+                                }
+                                else
+                                {
+                                    facesColorScheme.value.text = color;
+                                    gui.value(newTag, facesColorScheme);
                                 }
                             }
                             else

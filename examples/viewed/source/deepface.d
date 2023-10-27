@@ -25,16 +25,21 @@ else
     import mir.ser.json : serializeJson;
 }
 
-Path calcDeepfaceCachePath(Path file, Args args)
+Path calcDeepfaceCachePath(Path imageFile, Args args)
 {
     auto deepfaceDirectory = args.directory != Path.init
         ? args.directory.join(".deepfaceCache") : args.album.parent.join(".deepfaceCache");
-    return deepfaceDirectory.join(file.shorten(args));
+    return deepfaceDirectory.join(imageFile.shorten(args));
 }
 
-auto calcIdentityName(string s, Path suffix)
+Path calcDeepfaceJsonPath(Path cachePath)
 {
-    auto h = s.replace(suffix.toString ~ "/", "");
+    return cachePath.join("deepface.json");
+}
+
+auto calcIdentityName(string s, Path prefix)
+{
+    auto h = s.replace(prefix.expandTilde.toString ~ "/", "");
     return h.split("/")[0];
 }
 
@@ -51,6 +56,7 @@ auto calcIdentityName(string s, Path suffix)
     @serdeOptional string name; /// null if not recognized
     Match[] match;
     Region region;
+    @serdeOptional bool done;
     void calcName(Args args)
     {
         foreach (m; match)
@@ -93,16 +99,16 @@ class DeepfaceProcess
                 Redirect.stdin | Redirect.stdout);
     }
 
-    Face[] extractFaces(Path file, Args args)
+    Face[] extractFaces(Path imageFile, Args args)
     {
-        writeln(file);
-        auto cachePath = file.calcDeepfaceCachePath(args);
+        writeln(imageFile);
+        auto cachePath = imageFile.calcDeepfaceCachePath(args);
         if (!cachePath.exists)
         {
             cachePath.mkdir(true);
         }
         writeln(1);
-        auto deepfaceCache = cachePath.join("deepface.json");
+        auto deepfaceCache = cachePath.calcDeepfaceJsonPath();
         string response;
         if (deepfaceCache.exists)
         {
@@ -110,7 +116,7 @@ class DeepfaceProcess
         }
         else
         {
-            auto msg = "%s,%s".format(file, cachePath);
+            auto msg = "%s,%s".format(imageFile, cachePath);
             writeln("Writing to deepface process %s".format(msg));
             pipes.stdin.writeln(msg);
             pipes.stdin.flush();

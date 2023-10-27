@@ -9,19 +9,22 @@ dependency "sg4d" path="../.."
 dependency "pc4d" version="~>1.0.10"
 dependency "mir-ion" version="~>2.2.0"
 targetType "executable"
+
 configuration "opengl2" {
 	targetType "executable"
 	targetPath "../../out/opengl2"
 	excludedSourceFiles "source/testsuite.d"
 	versions "Default" "GL_ARB" "GL_AllowDeprecated" "DEBUG_DESTRUCTORS"
 }
+
 configuration "opengl33" {
-	dependency "dimgui" path="../../../_d/external/dimgui"
+	dependency "dimgui" version="~master"
 	targetType "executable"
 	targetPath "../../out/opengl33"
 	excludedSourceFiles "source/testsuite.d"
 	versions "GL_33"
 }
+
 configuration "unittest" {
 	dependency "dimgui" path="../../../_d/external/dimgui"
 	dependency "unit-threaded" version="~>2.1.7"

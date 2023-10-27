@@ -138,6 +138,16 @@ bool hasFaces(ImageFile imageFile, Variant[] arguments)
     return imageFile.faces !is null;
 }
 
+bool hasUnreviewedFaces(ImageFile imageFile, Variant[] arguments)
+{
+    enforce(arguments.length == 0, "hasUnreviewedFaces must not have arguments");
+    if (imageFile.faces is null)
+    {
+        return false;
+    }
+    return imageFile.faces.any!(face => !face.done);
+}
+
 Functions registerFunctions()
 {
     Functions functions;
@@ -146,6 +156,7 @@ Functions registerFunctions()
     functions["not"] = toDelegate(&notPredicate);
     functions["tagStartsWith"] = toDelegate(&tagStartsWith);
     functions["hasFaces"] = toDelegate(&hasFaces);
+    functions["hasUnreviewedFaces"] = toDelegate(&hasUnreviewedFaces);
     return functions;
 }
 
