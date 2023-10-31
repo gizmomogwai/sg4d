@@ -728,7 +728,7 @@ public void viewedMain(Args args)
     {
         class ImguiVisitor : Visitor
         {
-            import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha;
+            import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha, Sizes, ColumnLayout;
             import imgui.colorscheme : ColorScheme, defaultColorScheme;
 
             Window window;
@@ -757,12 +757,14 @@ public void viewedMain(Args args)
                     xPos += BORDER;
                     const width = window.width / 3;
                     // dfmt off
-                    string title = "Files %d/%d/%d".format(files.currentIndex + 1,
-                                                           files.filteredFiles.length,
-                                                           files.files.length);
-                    gui.scrollArea(fileList, title,
+                    gui.scrollArea(fileList,
                                    xPos, yPos, width, height,
-                                   () {
+                                   ()
+                                   {
+                                       string title = "Files %d/%d/%d".format(files.currentIndex + 1,
+                                                                              files.filteredFiles.length,
+                                                                              files.files.length);
+                                       gui.label(title);
                                        if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
                                            auto currentFile = files.front;
                                            auto currentCount = files.filteredFiles.length;
@@ -774,7 +776,8 @@ public void viewedMain(Args args)
                                            }
                                        }
                                    },
-                                   () {
+                                   ()
+                                   {
                                        xPos += width;
                                        foreach (file; files.filteredFiles)
                                        {
@@ -819,7 +822,7 @@ public void viewedMain(Args args)
         {
             xPos += BORDER;
             const width = window.width / 4;
-            gui.scrollArea(stats, "Stats", xPos, yPos, width, height, () {}, () {
+            gui.scrollArea(stats, xPos, yPos, width, height, () {gui.label("Stats");}, () {
                 xPos += width;
                 gui.label("UI Rendertime:");
                 gui.value(renderTime.total!("msecs")
@@ -835,7 +838,7 @@ public void viewedMain(Args args)
         {
             xPos += BORDER;
             const width = max(0, window.width - BORDER - xPos);
-            gui.scrollArea(fileInfo, "Info", xPos, yPos, width, height, () {}, () {
+            gui.scrollArea(fileInfo, xPos, yPos, width, height, () {gui.label("Info");}, () {
                 xPos += width;
                 auto imageFile = files.front;
                 auto imageFileName = imageFile.file;
@@ -870,7 +873,11 @@ public void viewedMain(Args args)
                 {
                     foreach (tag; imageFile.tags)
                     {
-                        if (gui.button(tag))
+                        gui.pushLayout(new ColumnLayout([-100, 0]));
+                        scope (exit) gui.popLayout();
+
+                        gui.value(tag);
+                        if (gui.button("X"))
                         {
                             imageFile.removeTag(tag);
                         }
@@ -950,13 +957,13 @@ public void viewedMain(Args args)
         if (viewedGui.isVisible)
         {
             // dfmt off
-            const scrollHeight = Sizes.SCROLL_AREA_HEADER
+            const scrollHeight =
                 + Sizes.SCROLL_AREA_PADDING
-                + Sizes.SLIDER_HEIGHT
+                + Sizes.LINE_HEIGHT
                 + Sizes.DEFAULT_SPACING
-                + Sizes.BUTTON_HEIGHT
+                + Sizes.LINE_HEIGHT
                 + Sizes.SCROLL_BAR_SIZE;
-            gui.scrollArea(viewedGui, "Gui", xPos + BORDER,
+            gui.scrollArea(viewedGui, xPos + BORDER,
                            window.height - BORDER - scrollHeight,
                            window.width - 2 * BORDER, scrollHeight,
                            () {},
