@@ -18,7 +18,7 @@ configuration "opengl2" {
 }
 
 configuration "opengl33" {
-	dependency "dimgui" version="~master"
+	dependency "dimgui:opengl33" version="~master"
 	targetType "executable"
 	targetPath "../../out/opengl33"
 	excludedSourceFiles "source/testsuite.d"

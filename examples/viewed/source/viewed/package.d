@@ -729,10 +729,11 @@ public void viewedMain(Args args)
         class ImguiVisitor : Visitor
         {
             import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha, Sizes, ColumnLayout;
+            import imgui.renderer.opengl33 : Opengl33;
             import imgui.colorscheme : ColorScheme, defaultColorScheme;
 
             Window window;
-            ImGui gui;
+            ImGui!Opengl33 gui;
             Duration renderTime;
             enum BORDER = 20;
             string newTag;
@@ -741,7 +742,7 @@ public void viewedMain(Args args)
             this(Window window)
             {
                 this.window = window;
-                gui = new ImGui(Path("~/.config/viewed/font.ttf").expandTilde().toString());
+                gui = new ImGui!(Opengl33)(Path("~/.config/viewed/font.ttf").expandTilde().toString());
                 ColorScheme h = defaultColorScheme;
                 h.textInput.back = RGBA(255, 0, 0, 255);
                 h.textInput.backDisabled = RGBA(255, 0, 0, 255);
@@ -1003,24 +1004,24 @@ public void viewedMain(Args args)
             renderFileInfo(xPos, yPos, height);
 
             void _move(int dx, int dy) => move(dx, dy, window, currentImageDimension, zoom);
-            gui.hotKey('w', () => _move(0, 10));
-            gui.hotKey('a', () => _move(-10, 0));
-            gui.hotKey('s', () => _move(0, -10));
-            gui.hotKey('d', () => _move(10, 0));
+            gui.hotKey('w', "Move Up", () => _move(0, 10));
+            gui.hotKey('a', "Move Left", () => _move(-10, 0));
+            gui.hotKey('s', "Move Down", () => _move(0, -10));
+            gui.hotKey('d', "Move Right", () => _move(10, 0));
 
             void _zoom(float newZoom) => zoomImage(window, currentImageDimension, zoom, newZoom);
-            gui.hotKey('+', () => _zoom(zoom + zoomDelta));
-            gui.hotKey('-', () => _zoom(zoom - zoomDelta));
-            gui.hotKey('1', () => _zoom(1.0 / 16));
-            gui.hotKey('2', () => _zoom(1.0 / 8));
-            gui.hotKey('3', () => _zoom(1.0 / 4));
-            gui.hotKey('4', () => _zoom(1.0 / 3));
-            gui.hotKey('5', () => _zoom(1.0));
-            gui.hotKey('6', () => _zoom(1.0 * 2));
-            gui.hotKey('7', () => _zoom(1.0 * 3));
-            gui.hotKey('8', () => _zoom(1.0 * 4));
-            gui.hotKey('9', () => _zoom(1.0 * 5));
-            gui.hotKey('0', () => _zoom(1.0 * 6));
+            gui.hotKey('+', "Zoom In", () => _zoom(zoom + zoomDelta));
+            gui.hotKey('-', "Zoom Out", () => _zoom(zoom - zoomDelta));
+            gui.hotKey('1', "Set Zoom to 1/16", () => _zoom(1.0 / 16));
+            gui.hotKey('2', "Set Zoom to 1/8", () => _zoom(1.0 / 8));
+            gui.hotKey('3', "Set Zoom to 1/4", () => _zoom(1.0 / 4));
+            gui.hotKey('4', "Set Zoom to 1/3", () => _zoom(1.0 / 3));
+            gui.hotKey('5', "Set Zoom to 1", () => _zoom(1.0));
+            gui.hotKey('6', "Set Zoom to 2", () => _zoom(1.0 * 2));
+            gui.hotKey('7', "Set Zoom to 3", () => _zoom(1.0 * 3));
+            gui.hotKey('8', "Set Zoom to 4", () => _zoom(1.0 * 4));
+            gui.hotKey('9', "Set Zoom to 5", () => _zoom(1.0 * 5));
+            gui.hotKey('0', "Set Zoom to 6", () => _zoom(1.0 * 6));
 
             void filesChanged()
             {
@@ -1030,22 +1031,23 @@ public void viewedMain(Args args)
                 imageChangedExternally = true;
             }
             // image navigation
-            gui.hotKey(['b', 263], () {
+            gui.hotKey(['b', 263], "Show previous image", () {
                 files.popBack;
                 filesChanged();
             });
-            gui.hotKey(['n', ' ', 262], () {
+            gui.hotKey(['n', ' ', 262], "Show next image", () {
                 files.popFront;
                 filesChanged();
             });
             // gui hotkeys
-            gui.hotKey('f', () => fileList.toggle());
-            gui.hotKey('i', () => fileInfo.toggle());
-            gui.hotKey(',', () => stats.toggle());
-            gui.hotKey('g', () => viewedGui.toggle());
-            gui.hotKey('r', () => revealFile(files.front));
+            gui.hotKey('f', "Show Filelist", () => fileList.toggle());
+            gui.hotKey('i', "Show Fileinfo", () => fileInfo.toggle());
+            gui.hotKey(',', "Show Statistics", () => stats.toggle());
+            gui.hotKey('g', "Show GUI", () => viewedGui.toggle());
+            gui.hotKey('r', "Reveal File in Finder", () => revealFile(files.front));
             // debug hotkey
-            gui.hotKey('p', () => scene.get.accept(new PrintVisitor()));
+            gui.hotKey('p', "Print Scenegraph", () => scene.get.accept(new PrintVisitor()));
+            gui.hotKey('h', "Print Hotkeys", () => writeln(gui.state.hotkeys.map!(i => i.to!string).join("\n")));
         });
         import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
             GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
