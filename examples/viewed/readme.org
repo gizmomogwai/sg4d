@@ -2,6 +2,9 @@
 
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
 
+* BUGS
+** TODO filter with 0 hits crashes program (e.g. (tagStartsWith notExistent)
+
 * Ideas
 ** TODO replace legacy iotd=true properties file
 ** DONE add filter to files list ...

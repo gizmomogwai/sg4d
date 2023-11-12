@@ -26,7 +26,7 @@ configuration "opengl33" {
 }
 
 configuration "unittest" {
-	dependency "dimgui" path="../../../_d/external/dimgui"
+	dependency "dimgui:opengl33" version="~master"
 	dependency "unit-threaded" version="~>2.1.7"
 	targetType "executable"
 	targetPath "../../out/tests"

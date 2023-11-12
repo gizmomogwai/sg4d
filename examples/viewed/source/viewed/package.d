@@ -131,13 +131,19 @@ class ImageFile
 
     auto storeFaceInfo(Args args)
     {
-        Path deepfaceJson = file.calcDeepfaceCachePath(args).calcDeepfaceJsonPath();
-        Path newFile = deepfaceJson.withExt("new");
-        newFile.writeFile(serializeJson(faces));
-        auto result = ["mv", newFile.toString, deepfaceJson.toString].execute;
-        if (result.status != 0)
+        version (unittest)
         {
-            writeln("Cannot rename ", newFile, " to ", deepfaceJson);
+        }
+        else
+        {
+            Path deepfaceJson = file.calcDeepfaceCachePath(args).calcDeepfaceJsonPath();
+            Path newFile = deepfaceJson.withExt("new");
+            newFile.writeFile(serializeJson(faces));
+            auto result = ["mv", newFile.toString, deepfaceJson.toString].execute;
+            if (result.status != 0)
+            {
+                writeln("Cannot rename ", newFile, " to ", deepfaceJson);
+            }
         }
     }
 }

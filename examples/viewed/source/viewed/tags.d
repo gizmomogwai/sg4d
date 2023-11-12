@@ -6,6 +6,10 @@ import std.conv : to;
 import std.format : format;
 import std.range : empty;
 import thepath : Path;
+version (unittest)
+{
+    import unit_threaded : should;
+}
 
 string identityTag(string identity) => format!("identity:%s")(identity);
 
