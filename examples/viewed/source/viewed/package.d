@@ -19,7 +19,8 @@ import imgui.colorscheme : RGBA;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, joiner, countUntil, sort, reverse, filter, find, clamp, remove;
+import std.algorithm : min, max, map, joiner, countUntil, sort, reverse,
+    filter, find, clamp, remove;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout,
     spawnLinked, LinkTerminated, OwnerTerminated;
 import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
@@ -748,7 +749,8 @@ public void viewedMain(Args args)
             this(Window window)
             {
                 this.window = window;
-                gui = new ImGui!(Opengl33)(Path("~/.config/viewed/font.ttf").expandTilde().toString());
+                gui = new ImGui!(Opengl33)(Path("~/.config/viewed/font.ttf")
+                        .expandTilde().toString());
                 ColorScheme h = defaultColorScheme;
                 h.textInput.back = RGBA(255, 0, 0, 255);
                 h.textInput.backDisabled = RGBA(255, 0, 0, 255);
@@ -829,7 +831,9 @@ public void viewedMain(Args args)
         {
             xPos += BORDER;
             const width = window.width / 4;
-            gui.scrollArea(stats, xPos, yPos, width, height, () {gui.label("Stats");}, () {
+            gui.scrollArea(stats, xPos, yPos, width, height, () {
+                gui.label("Stats");
+            }, () {
                 xPos += width;
                 gui.label("UI Rendertime:");
                 gui.value(renderTime.total!("msecs")
@@ -845,7 +849,9 @@ public void viewedMain(Args args)
         {
             xPos += BORDER;
             const width = max(0, window.width - BORDER - xPos);
-            gui.scrollArea(fileInfo, xPos, yPos, width, height, () {gui.label("Info");}, () {
+            gui.scrollArea(fileInfo, xPos, yPos, width, height, () {
+                gui.label("Info");
+            }, () {
                 xPos += width;
                 auto imageFile = files.front;
                 auto imageFileName = imageFile.file;
@@ -881,7 +887,8 @@ public void viewedMain(Args args)
                     foreach (tag; imageFile.tags)
                     {
                         gui.pushLayout(new ColumnLayout([-100, 0]));
-                        scope (exit) gui.popLayout();
+                        scope (exit)
+                            gui.popLayout();
 
                         gui.value(tag);
                         if (gui.button("X"))
@@ -1033,7 +1040,7 @@ public void viewedMain(Args args)
             {
                 state = state.updateAndStore(files, args);
                 spawn(&loadNextImageSpawnable, vec2(window.width,
-                window.height), cast(shared) files.front, renderFaces, colors,);
+                    window.height), cast(shared) files.front, renderFaces, colors,);
                 imageChangedExternally = true;
             }
             // image navigation
@@ -1053,7 +1060,8 @@ public void viewedMain(Args args)
             gui.hotKey('r', "Reveal File in Finder", () => revealFile(files.front));
             // debug hotkey
             gui.hotKey('p', "Print Scenegraph", () => scene.get.accept(new PrintVisitor()));
-            gui.hotKey('h', "Print Hotkeys", () => writeln(gui.state.hotkeys.map!(i => i.to!string).join("\n")));
+            gui.hotKey('h', "Print Hotkeys",
+                () => writeln(gui.state.hotkeys.map!(i => i.to!string).join("\n")));
         });
         import bindbc.opengl : glEnable, GL_BLEND, GL_SRC_ALPHA,
             GL_ONE_MINUS_SRC_ALPHA, GL_DEPTH_TEST, glDisable, glBlendFunc;
@@ -1098,13 +1106,9 @@ loadNextImage(thisTid, vec2(window.width, window.height), files.front, renderFac
 
 Visitor renderVisitor = new RenderVisitor(window);
 Visitor imguiVisitor = new ImguiVisitor(window);
-    auto visitors = [
-        renderVisitor,
-        new BehaviorVisitor(),
-        imguiVisitor,
-    ];
+auto visitors = [renderVisitor, new BehaviorVisitor(), imguiVisitor,];
 
-    while (!window.window.glfwWindowShouldClose())
+while (!window.window.glfwWindowShouldClose())
 {
     foreach (visitor; visitors)
     {
@@ -1114,9 +1118,9 @@ Visitor imguiVisitor = new ImguiVisitor(window);
     window.window.glfwSwapBuffers();
 
     // poll glfw
-        glfwPollEvents();
-        // and scene graph "events"
-        // dfmt off
+    glfwPollEvents();
+    // and scene graph "events"
+    // dfmt off
         receiveTimeout(-1.msecs,
                        (shared void delegate(ObserverData, ref vec2, ref float, ref long) codeForOglThread) {
                            currentError = "";
@@ -1147,5 +1151,5 @@ Visitor imguiVisitor = new ImguiVisitor(window);
                        },
         );
         // dfmt on
-    }
+}
 }

@@ -97,8 +97,8 @@ class ExpressionParser
     StringParser functionCall()
     {
         return (regex("\\s*\\(\\s*",
-                      false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
-                          data) {
+                false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
+                data) {
             return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
         };
     }
@@ -149,17 +149,20 @@ string delegateBody(T...)()
 {
     import std.format : format;
     import std.traits : isArray;
+
     static if ((T.length == 2) && (isArray!(T[1])))
     {
-        return format("return f(file, args.map!(i => i.get!(%s)).array);", ElementType!(T[1]).stringof);
+        return format("return f(file, args.map!(i => i.get!(%s)).array);",
+                ElementType!(T[1]).stringof);
     }
     else
     {
-        string result = format("enforce(args.length == %s, \"'\" ~ name ~ \"' needs exactly %s arguments\");", T.length - 1, T.length - 1);
+        string result = format("enforce(args.length == %s, \"'\" ~ name ~ \"' needs exactly %s arguments\");",
+                T.length - 1, T.length - 1);
         result ~= "return f(file";
         static foreach (i; 1 .. T.length)
         {
-            result ~= format(", args[%s].get!(%s)", i-1, T[i].stringof);
+            result ~= format(", args[%s].get!(%s)", i - 1, T[i].stringof);
         }
         result ~= ");";
         return result;
@@ -177,7 +180,8 @@ string delegateBody(T...)()
  +/
 void wire(string name, Arguments...)(ref Functions functions, bool delegate(Arguments) f)
 {
-    const s = "functions[name] = delegate(ImageFile file, Variant[] args) {" ~ delegateBody!(Arguments)() ~ "};";
+    const s = "functions[name] = delegate(ImageFile file, Variant[] args) {"
+        ~ delegateBody!(Arguments)() ~ "};";
     // pragma(msg, name~ ":");
     // pragma(msg, s);
     mixin(s);
@@ -206,6 +210,7 @@ auto matcherForExpression(string s)
 @("expression parser") unittest
 {
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto m = matcherForExpression("abc");
@@ -260,6 +265,7 @@ auto matcherForExpression(string s)
     m.matches(imageFile).should == false;
 
     import deepface : Face;
+
     imageFile.faces = [Face()];
     m.matches(imageFile).should == true;
 
@@ -277,24 +283,30 @@ auto matcherForExpression(string s)
     m.matches(imageFile).should == false;
 }
 
-@("not without arguments raises expection") unittest {
+@("not without arguments raises expection") unittest
+{
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto m = matcherForExpression("(not)");
     m.matches(imageFile).shouldThrow;
 }
 
-@("tagStartsWith without arguments raises exception") unittest {
+@("tagStartsWith without arguments raises exception") unittest
+{
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto m = matcherForExpression("(tagStartsWith)");
     m.matches(imageFile).shouldThrow;
 }
 
-@("tagStartsWith with too many arguments raises exception") unittest {
+@("tagStartsWith with too many arguments raises exception") unittest
+{
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto m = matcherForExpression("(tagStartsWith a b)");
@@ -304,6 +316,7 @@ auto matcherForExpression(string s)
 @("parseExpression") unittest
 {
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
     auto m = matcherForExpression("abc");
@@ -316,6 +329,7 @@ auto matcherForExpression(string s)
 @("calling unknown function") unittest
 {
     import thepath : Path;
+
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
     auto m = matcherForExpression("(unknown)");

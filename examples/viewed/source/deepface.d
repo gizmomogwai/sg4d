@@ -134,7 +134,8 @@ class DeepfaceProcess
             {
                 return null;
             }
-            Face[] faces = deserializeJson!(Face[])(response).filter!(f => f.confidence > 0.5f).array;
+            Face[] faces = deserializeJson!(Face[])(response).filter!(f => f.confidence > 0.5f)
+                .array;
             foreach (ref face; faces)
             {
                 face.calcName(args);
@@ -160,6 +161,5 @@ void finishDeepface(Args args)
 
 Face[] deepface(Path file, Args args)
 {
-
     return DeepfaceProcess.getInstance(args.deepfaceIdentities).extractFaces(file, args);
 }

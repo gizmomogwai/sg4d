@@ -6,6 +6,7 @@ import std.conv : to;
 import std.format : format;
 import std.range : empty;
 import thepath : Path;
+
 version (unittest)
 {
     import unit_threaded : should;
@@ -17,6 +18,7 @@ auto toTagsPath(Path imagePath)
 {
     return Path(imagePath.toString() ~ ".tags");
 }
+
 auto loadTags(Path imagePath)
 {
     auto tagsPath = imagePath.toTagsPath();
