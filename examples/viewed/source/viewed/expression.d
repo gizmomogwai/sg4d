@@ -145,50 +145,43 @@ bool hasUnreviewedFaces(ImageFile imageFile)
     return imageFile.faces.any!(face => !face.done);
 }
 
-/+
- + Creaate a delegate body for 3 cases:
- +  1. function does not take any arguments from the expression (e.g. hasFaces)
- +  2. function takes variable number of arguments (all the same) (mapped to an array of this type) (e.g. or)
- +  3. function takes several arguments (always the same count) (e.g. not or tagStartsWith)
- +/
 string delegateBody(T...)()
 {
     import std.format : format;
     import std.traits : isArray;
-    static if (T.length == 1) // case 1
+    static if ((T.length == 2) && (isArray!(T[1])))
     {
-        return format("enforce(args.length == 0, \"'\" ~ name ~ \"' must not have arguments\"); return f(file);");
+        return format("return f(file, args.map!(i => i.get!(%s)).array);", ElementType!(T[1]).stringof);
     }
-    else static if (T.length >= 2)
+    else
     {
-        static if (isArray!(T[1])) // case 2
+        string result = format("enforce(args.length == %s, \"'\" ~ name ~ \"' needs exactly %s arguments\");", T.length - 1, T.length - 1);
+        result ~= "return f(file";
+        static foreach (i; 1 .. T.length)
         {
-            return format("return f(file, args.map!(i => i.get!(%s)).array);", ElementType!(T[1]).stringof);
+            result ~= format(", args[%s].get!(%s)", i-1, T[i].stringof);
         }
-        else // case 3
-        {
-            string result = format("enforce(args.length == %s, \"'\" ~ name ~ \"' needs exactly %s arguments\");", T.length - 1, T.length - 1);
-            result ~= "return f(file, ";
-            static foreach (i; 1 .. T.length)
-            {
-                result ~= format("args[%s].get!(%s), ", i-1, T[i].stringof);
-            }
-
-            result = result[0..$-2];
-            result ~= ");";
-            return result;
-        }
+        result ~= ");";
+        return result;
     }
 }
 
+/++
+ + The parser calls registerd functions with (ImageFile, Variant[]).
+ + Register a "normal" functions whose arguments are automatically extracted from the variants.
+ + The mapping from variants to normal types follows the following strategy:
+ + - all functions need to take at least ImageFile as first parameter
+ + - then they can take 0..n other non array types which are automatically taken out of the variant array
+ + - or take one array type which elements are taken out of the variant array
+ + If you want more control over the conversion add normal delegates to "functions".
+ +/
 void wire(string name, Arguments...)(ref Functions functions, bool delegate(Arguments) f)
 {
     const s = "functions[name] = delegate(ImageFile file, Variant[] args) {" ~ delegateBody!(Arguments)() ~ "};";
-//    pragma(msg, name~ ":");
-//    pragma(msg, s);
+    // pragma(msg, name~ ":");
+    // pragma(msg, s);
     mixin(s);
 }
-
 
 Functions registerFunctions()
 {
@@ -202,20 +195,24 @@ Functions registerFunctions()
     return functions;
 }
 
+/++
+ + Convenience function to parse an expression and return the matcher.
+ +/
+auto matcherForExpression(string s)
+{
+    return new ExpressionParser(registerFunctions()).expression().parse(s).results[0].get!Matcher;
+}
+
 @("expression parser") unittest
 {
     import thepath : Path;
-
-    auto parser = new ExpressionParser(registerFunctions());
-    auto result = parser.expression.parse("abc");
-    result.success.should == true;
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
-    imageFile.tags = ["abc"];
-    result.results[0].get!Matcher.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(or abc def)");
-    result.success.should == true;
-    auto m = result.results[0].get!Matcher;
+    auto m = matcherForExpression("abc");
+    imageFile.tags = ["abc"];
+    m.matches(imageFile).should == true;
+
+    m = matcherForExpression("(or abc def)");
     imageFile.tags = ["abc"];
     m.matches(imageFile).should == true;
     imageFile.tags = ["def"];
@@ -223,8 +220,7 @@ Functions registerFunctions()
     imageFile.tags = ["ghi"];
     m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(and abc def)");
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(and abc def)");
     imageFile.tags = ["abc"];
     m.matches(imageFile).should == false;
     imageFile.tags = ["def"];
@@ -234,9 +230,7 @@ Functions registerFunctions()
     imageFile.tags = ["abc", "def", "ghi"];
     m.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(and a (or b c))");
-    result.success.should == true;
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(and a (or b c))");
     imageFile.tags = ["a", "b"];
     m.matches(imageFile).should == true;
     imageFile.tags = ["a", "c"];
@@ -246,9 +240,7 @@ Functions registerFunctions()
     imageFile.tags = ["a"];
     m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(not a)");
-    result.success.should == true;
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(not a)");
     imageFile.tags = ["a"];
     m.matches(imageFile).should == false;
     imageFile.tags = ["a", "b"];
@@ -258,76 +250,74 @@ Functions registerFunctions()
     imageFile.tags = [];
     m.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(tagStartsWith abc)");
-    result.success.should == true;
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(tagStartsWith abc)");
     imageFile.tags = ["abcd"];
     m.matches(imageFile).should == true;
     imageFile.tags = ["ab"];
     m.matches(imageFile).should == false;
 
-    result = parser.expression.parse("(hasFaces)");
-    result.success.should == true;
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(hasFaces)");
     m.matches(imageFile).should == false;
 
     import deepface : Face;
     imageFile.faces = [Face()];
     m.matches(imageFile).should == true;
 
-    result = parser.expression.parse("(hasUnreviewedFaces)");
-    result.success.should == true;
-    m = result.results[0].get!Matcher;
+    m = matcherForExpression("(hasUnreviewedFaces)");
+    // faces are not done
     imageFile.faces[0].done = false;
     m.matches(imageFile).should == true;
 
+    // faces are done
     imageFile.faces[0].done = true;
+    m.matches(imageFile).should == false;
+
+    // no faces
+    imageFile.faces = null;
     m.matches(imageFile).should == false;
 }
 
 @("not without arguments raises expection") unittest {
     import thepath : Path;
-    auto parser = new ExpressionParser(registerFunctions());
-    auto result = parser.expression.parse("(not)");
-    result.success.should == true;
-    auto m = result.results[0].get!Matcher;
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+
+    auto m = matcherForExpression("(not)");
     m.matches(imageFile).shouldThrow;
 }
 
 @("tagStartsWith without arguments raises exception") unittest {
     import thepath : Path;
-    auto parser = new ExpressionParser(registerFunctions());
-    auto result = parser.expression.parse("(tagStartsWith)");
-    result.success.should == true;
-    auto m = result.results[0].get!Matcher;
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+
+    auto m = matcherForExpression("(tagStartsWith)");
     m.matches(imageFile).shouldThrow;
 }
 
 @("tagStartsWith with too many arguments raises exception") unittest {
     import thepath : Path;
-    auto parser = new ExpressionParser(registerFunctions());
-    auto result = parser.expression.parse("(tagStartsWith a b)");
-    result.success.should == true;
-    auto m = result.results[0].get!Matcher;
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
-    m.matches(imageFile).shouldThrow;
-}
 
-auto matcherForExpression(string s)
-{
-    return new ExpressionParser(registerFunctions()).expression().parse(s).results[0].get!Matcher;
+    auto m = matcherForExpression("(tagStartsWith a b)");
+    m.matches(imageFile).shouldThrow;
 }
 
 @("parseExpression") unittest
 {
     import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
-    auto e = matcherForExpression("abc");
+
+    auto m = matcherForExpression("abc");
     imageFile.tags = ["abc", "def"];
-    e.matches(imageFile).should == true;
+    m.matches(imageFile).should == true;
     imageFile.tags = ["def"];
-    e.matches(imageFile).should == false;
+    m.matches(imageFile).should == false;
+}
+
+@("calling unknown function") unittest
+{
+    import thepath : Path;
+    ImageFile imageFile = new ImageFile(Path("gibts nicht"));
+
+    auto m = matcherForExpression("(unknown)");
+    m.matches(imageFile).shouldThrow;
 }
