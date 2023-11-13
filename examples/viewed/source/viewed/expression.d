@@ -4,6 +4,7 @@ import pc4d.parsers : alnum, lazyParser, regex;
 import pc4d.parser : Parser;
 import std.string : format;
 import std.algorithm : all, any, map;
+import std.range : ElementType;
 import std.array : array;
 import std.functional : toDelegate;
 import std.variant : Variant, variantArray;
@@ -160,9 +161,9 @@ string delegateBody(T...)()
     }
     else static if (T.length >= 2)
     {
-        static if (T[1].stringof[$-2..$] == "[]") // case 2
+        static if (isArray!(T[1])) // case 2
         {
-            return format("return f(file, args.map!(i => i.get!(%s)).array);", T[1].stringof[0..$-2]);
+            return format("return f(file, args.map!(i => i.get!(%s)).array);", ElementType!(T[1]).stringof);
         }
         else // case 3
         {
