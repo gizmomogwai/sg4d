@@ -234,8 +234,8 @@ class Files
         {
             try
             {
-                auto matcher = filter.matcherForExpression;
-                filteredFiles = files.filter!(f => matcher.matches(f)).array;
+                auto predicate = filter.predicateForExpression;
+                filteredFiles = files.filter!(f => predicate.test(f)).array;
                 filterState = true;
             }
             catch (Exception e)

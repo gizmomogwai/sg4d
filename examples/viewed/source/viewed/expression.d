@@ -1,10 +1,10 @@
 module viewed.expression;
 
-import pc4d.parsers : alnum, lazyParser, regex;
+import pc4d.parsers : alnum, lazyParser, regex, Regex;
 import pc4d.parser : Parser;
 import std.string : format;
-import std.algorithm : all, any, map;
-import std.range : ElementType;
+import std.algorithm : all, any, map, find;
+import std.range : ElementType, empty;
 import std.array : array;
 import std.functional : toDelegate;
 import std.variant : Variant, variantArray;
@@ -18,15 +18,15 @@ version (unittest)
 }
 
 alias StringParser = Parser!(immutable(char));
-alias Predicate = bool delegate(ImageFile, Variant[]);
-alias Functions = Predicate[string];
+alias PredicateDelegate = bool delegate(ImageFile, Variant[]);
+alias Delegates = PredicateDelegate[string];
 
-abstract class Matcher
+abstract class Predicate
 {
-    abstract bool matches(ImageFile image);
+    abstract bool test(ImageFile image);
 }
 
-class TagMatcher : Matcher
+class TagPredicate : Predicate
 {
     string tag;
     this(string tag)
@@ -34,7 +34,7 @@ class TagMatcher : Matcher
         this.tag = tag;
     }
 
-    override bool matches(ImageFile image)
+    override bool test(ImageFile image)
     {
         foreach (tag; image.tags)
         {
@@ -47,39 +47,46 @@ class TagMatcher : Matcher
     }
 }
 
-class FunctionCallMatcher : Matcher
+class DelegateCallPredicate : Predicate
 {
-    Functions functions;
-    string functionName;
+    Delegates delegates;
+    string delegateName;
     Variant[] arguments;
-    this(Functions functions, string functionName, Variant[] arguments)
+    this(Delegates delegates, string delegateName, Variant[] arguments)
     {
-        this.functions = functions;
-        this.functionName = functionName;
+        this.delegates = delegates;
+        this.delegateName = delegateName;
         this.arguments = arguments;
     }
 
-    override bool matches(ImageFile imageFile)
+    override bool test(ImageFile imageFile)
     {
-        if (functionName !in functions)
+        if (delegateName !in delegates)
         {
-            throw new Exception(format!("Unknown function '%s'")(functionName));
+            throw new Exception(format!("Unknown function '%s'")(delegateName));
         }
-        return functions[functionName](imageFile, arguments);
+        return delegates[delegateName](imageFile, arguments);
     }
+}
+
+auto alnumWithSlash()
+{
+    return new Regex(`-?[\w\d/]+`, true) ^^ (data) {
+        return variantArray(data[0]);
+    };
 }
 
 class ExpressionParser
 {
-    Functions functions;
-    this(Functions functions)
+    Delegates delegates;
+    this(Delegates delegates)
     {
-        this.functions = functions;
+        this.delegates = delegates;
     }
 
     StringParser expression()
     {
-        return functionCall() | terminal();
+        return delegateCall() | terminal();
     }
 
     StringParser lazyExpression()
@@ -89,17 +96,17 @@ class ExpressionParser
 
     StringParser terminal()
     {
-        return (regex("\\s*", false) ~ alnum!(immutable(char)) ~ regex("\\s*", false)) ^^ (data) {
-            return variantArray(new TagMatcher(data[0].get!string));
+        return (regex("\\s*", false) ~ alnumWithSlash() ~ regex("\\s*", false)) ^^ (data) {
+            return variantArray(new TagPredicate(data[0].get!string));
         };
     }
 
-    StringParser functionCall()
+    StringParser delegateCall()
     {
         return (regex("\\s*\\(\\s*",
                 false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
                 data) {
-            return variantArray(new FunctionCallMatcher(functions, data[0].get!string, data[1 .. $]));
+            return variantArray(new DelegateCallPredicate(delegates, data[0].get!string, data[1 .. $]));
         };
     }
 
@@ -109,26 +116,26 @@ class ExpressionParser
     }
 }
 
-bool andPredicate(ImageFile imageFile, Matcher[] arguments)
+bool andPredicate(ImageFile imageFile, Predicate[] arguments)
 {
     enforce(arguments.length > 0, "and needs at least one argument");
-    return arguments.all!(m => m.matches(imageFile));
+    return arguments.all!(p => p.test(imageFile));
 }
 
-bool orPredicate(ImageFile imageFile, Matcher[] arguments)
+bool orPredicate(ImageFile imageFile, Predicate[] arguments)
 {
     enforce(arguments.length > 0, "or needs at least one argument");
-    return arguments.any!(m => m.matches(imageFile));
+    return arguments.any!(p => p.test(imageFile));
 }
 
-bool notPredicate(ImageFile imageFile, Matcher argument)
+bool notPredicate(ImageFile imageFile, Predicate argument)
 {
-    return !argument.matches(imageFile);
+    return !argument.test(imageFile);
 }
 
-bool tagStartsWith(ImageFile imageFile, TagMatcher tagMatcher)
+bool tagStartsWith(ImageFile imageFile, TagPredicate tagPredicate)
 {
-    return imageFile.tags.any!(t => t.startsWith(tagMatcher.tag));
+    return imageFile.tags.any!(t => t.startsWith(tagPredicate.tag));
 }
 
 bool hasFaces(ImageFile imageFile)
@@ -143,6 +150,11 @@ bool hasUnreviewedFaces(ImageFile imageFile)
         return false;
     }
     return imageFile.faces.any!(face => !face.done);
+}
+
+bool fileIncludes(ImageFile imageFile, TagPredicate tagPredicate)
+{
+    return !imageFile.file.toString.find(tagPredicate.tag).empty;
 }
 
 string delegateBody(T...)()
@@ -170,41 +182,42 @@ string delegateBody(T...)()
 }
 
 /++
- + The parser calls registerd functions with (ImageFile, Variant[]).
- + Register a "normal" functions whose arguments are automatically extracted from the variants.
+ + The parser calls registerd delegates with (ImageFile, Variant[]).
+ + Register a "normal" delegates whose arguments are automatically extracted from the variants.
  + The mapping from variants to normal types follows the following strategy:
- + - all functions need to take at least ImageFile as first parameter
+ + - all delegates need to take at least ImageFile as first parameter
  + - then they can take 0..n other non array types which are automatically taken out of the variant array
  + - or take one array type which elements are taken out of the variant array
- + If you want more control over the conversion add normal delegates to "functions".
+ + If you want more control over the conversion add normal delegates to "delegates".
  +/
-void wire(string name, Arguments...)(ref Functions functions, bool delegate(Arguments) f)
+void wire(string name, Arguments...)(ref Delegates delegates, bool delegate(Arguments) f)
 {
-    const s = "functions[name] = delegate(ImageFile file, Variant[] args) {"
+    const s = "delegates[name] = delegate(ImageFile file, Variant[] args) {"
         ~ delegateBody!(Arguments)() ~ "};";
     // pragma(msg, name~ ":");
     // pragma(msg, s);
     mixin(s);
 }
 
-Functions registerFunctions()
+Delegates registerDelegates()
 {
-    Functions functions;
-    functions.wire!("or")(toDelegate(&orPredicate));
-    functions.wire!("and")(toDelegate(&andPredicate));
-    functions.wire!("not")(toDelegate(&notPredicate));
-    functions.wire!("tagStartsWith")(toDelegate(&tagStartsWith));
-    functions.wire!("hasFaces")(toDelegate(&hasFaces));
-    functions.wire!("hasUnreviewedFaces")(toDelegate(&hasUnreviewedFaces));
-    return functions;
+    Delegates delegates;
+    delegates.wire!("or")(toDelegate(&orPredicate));
+    delegates.wire!("and")(toDelegate(&andPredicate));
+    delegates.wire!("not")(toDelegate(&notPredicate));
+    delegates.wire!("tagStartsWith")(toDelegate(&tagStartsWith));
+    delegates.wire!("hasFaces")(toDelegate(&hasFaces));
+    delegates.wire!("hasUnreviewedFaces")(toDelegate(&hasUnreviewedFaces));
+    delegates.wire!("fileIncludes")(toDelegate(&fileIncludes));
+    return delegates;
 }
 
 /++
  + Convenience function to parse an expression and return the matcher.
  +/
-auto matcherForExpression(string s)
+auto predicateForExpression(string s)
 {
-    return new ExpressionParser(registerFunctions()).expression().parse(s).results[0].get!Matcher;
+    return new ExpressionParser(registerDelegates()).expression().parse(s).results[0].get!Predicate;
 }
 
 @("expression parser") unittest
@@ -213,74 +226,74 @@ auto matcherForExpression(string s)
 
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto m = matcherForExpression("abc");
+    auto p = predicateForExpression("abc");
     imageFile.tags = ["abc"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
 
-    m = matcherForExpression("(or abc def)");
+    p = predicateForExpression("(or abc def)");
     imageFile.tags = ["abc"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["def"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["ghi"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 
-    m = matcherForExpression("(and abc def)");
+    p = predicateForExpression("(and abc def)");
     imageFile.tags = ["abc"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
     imageFile.tags = ["def"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
     imageFile.tags = ["abc", "def"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["abc", "def", "ghi"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
 
-    m = matcherForExpression("(and a (or b c))");
+    p = predicateForExpression("(and a (or b c))");
     imageFile.tags = ["a", "b"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["a", "c"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["c"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
     imageFile.tags = ["a"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 
-    m = matcherForExpression("(not a)");
+    p = predicateForExpression("(not a)");
     imageFile.tags = ["a"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
     imageFile.tags = ["a", "b"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
     imageFile.tags = ["b"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = [];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
 
-    m = matcherForExpression("(tagStartsWith abc)");
+    p = predicateForExpression("(tagStartsWith abc)");
     imageFile.tags = ["abcd"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["ab"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 
-    m = matcherForExpression("(hasFaces)");
-    m.matches(imageFile).should == false;
+    p = predicateForExpression("(hasFaces)");
+    p.test(imageFile).should == false;
 
     import deepface : Face;
 
     imageFile.faces = [Face()];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
 
-    m = matcherForExpression("(hasUnreviewedFaces)");
+    p = predicateForExpression("(hasUnreviewedFaces)");
     // faces are not done
     imageFile.faces[0].done = false;
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
 
     // faces are done
     imageFile.faces[0].done = true;
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 
     // no faces
     imageFile.faces = null;
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 }
 
 @("not without arguments raises expection") unittest
@@ -289,8 +302,8 @@ auto matcherForExpression(string s)
 
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto m = matcherForExpression("(not)");
-    m.matches(imageFile).shouldThrow;
+    auto p = predicateForExpression("(not)");
+    p.test(imageFile).shouldThrow;
 }
 
 @("tagStartsWith without arguments raises exception") unittest
@@ -299,8 +312,8 @@ auto matcherForExpression(string s)
 
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto m = matcherForExpression("(tagStartsWith)");
-    m.matches(imageFile).shouldThrow;
+    auto p = predicateForExpression("(tagStartsWith)");
+    p.test(imageFile).shouldThrow;
 }
 
 @("tagStartsWith with too many arguments raises exception") unittest
@@ -309,29 +322,27 @@ auto matcherForExpression(string s)
 
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto m = matcherForExpression("(tagStartsWith a b)");
-    m.matches(imageFile).shouldThrow;
+    auto p = predicateForExpression("(tagStartsWith a b)");
+    p.test(imageFile).shouldThrow;
 }
 
 @("parseExpression") unittest
 {
     import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
-    auto m = matcherForExpression("abc");
+    auto p = predicateForExpression("abc");
     imageFile.tags = ["abc", "def"];
-    m.matches(imageFile).should == true;
+    p.test(imageFile).should == true;
     imageFile.tags = ["def"];
-    m.matches(imageFile).should == false;
+    p.test(imageFile).should == false;
 }
 
 @("calling unknown function") unittest
 {
     import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
-    auto m = matcherForExpression("(unknown)");
-    m.matches(imageFile).shouldThrow;
+    auto p = predicateForExpression("(unknown)");
+    p.test(imageFile).shouldThrow;
 }
