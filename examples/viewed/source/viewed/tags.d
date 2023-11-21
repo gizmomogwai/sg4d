@@ -6,6 +6,7 @@ import std.conv : to;
 import std.format : format;
 import std.range : empty;
 import thepath : Path;
+import std.typecons : Tuple;
 
 version (unittest)
 {
@@ -19,39 +20,66 @@ auto toTagsPath(Path imagePath)
     return Path(imagePath.toString() ~ ".tags");
 }
 
-auto loadTags(Path imagePath)
+auto loadCache(Path imagePath)
 {
     auto tagsPath = imagePath.toTagsPath();
+    
     if (tagsPath.exists())
     {
-        return tagsPath.readFileText.loadTagsFile();
+        return tagsPath.readFileText.loadCacheFile();
     }
     auto propertiesFile = Path(imagePath.toString() ~ ".properties");
     if (propertiesFile.exists())
     {
-        auto result = propertiesFile.readFileText.loadJavaProperties();
-        tagsPath.storeTags(result);
+        auto fromFile = propertiesFile.readFileText.loadJavaProperties();
+        tagsPath.storeCache(fromFile, []);
+        CacheData result;
+        result.tags = fromFile;
         return result;
     }
-    return null;
+    CacheData result;
+    return result;
 }
 
-auto storeTags(Path imagePath, string[] tags)
+auto storeCache(Path imagePath, string[] tags, float[] gps)
 {
     auto tagsPath = imagePath.toTagsPath();
-    if (tags.empty)
+    if (tags.empty && gps == null)
     {
-        tagsPath.remove();
+        if (tagsPath.exists)
+        {
+            tagsPath.remove();
+        }
     }
     else
     {
-        tagsPath.writeFile(tags.toTagsFileContent());
+        tagsPath.writeFile(toCacheFileContent(tags, gps));
     }
 }
 
-private auto loadTagsFile(string content)
+alias CacheData = Tuple!(string[], "tags", float[], "gps");
+
+private auto loadCacheFile(string content)
 {
-    return content.split(",").array;
+    auto lines = content.split("\n");
+    string[] tags;
+    if (lines.length > 0)
+    {
+        tags = lines[0].split(",").array;
+    }
+    float[] gps;
+    if (lines.length > 1)
+    {
+        if (lines[1] != "no")
+        {
+            gps = lines[1].split(",").map!("a.to!float").array;
+        }
+    }
+    CacheData result;
+    result.tags = tags;
+    result.gps = gps;
+
+    return result;
 }
 
 private auto loadJavaProperties(string content)
@@ -69,9 +97,12 @@ private auto loadJavaProperties(string content)
     "iotd=false\niotd2=true\n".loadJavaProperties.should == ["iotd2"];
 }
 
-string toTagsFileContent(string[] args)
+string toCacheFileContent(string[] tags, float[] gps)
 {
-    return args.join(",");
+    return format!("%s\n%s\n")(
+        tags.join(","),
+        (gps == null) ? "no" : gps.map!("a.to!string").join(",")
+    );
 }
 
 string toJavaProperties(string[] tags)

@@ -33,15 +33,15 @@ import std.format : format;
 import std.math.traits : isNaN;
 import std.process : execute;
 import std.range : chunks, take, empty;
-import std.regex : replaceFirst, regex;
+import std.regex : replaceFirst, regex, matchFirst;
 import std.stdio : writeln;
 import viewed.expression;
-import thepath : Path;
-import viewed.tags : identityTag, loadTags, storeTags;
+public import thepath : Path;
+import viewed.tags : identityTag, loadCache, storeCache;
 
 version (unittest)
 {
-    import unit_threaded : should;
+    import unit_threaded : should, shouldApproxEqual;
 }
 else
 {
@@ -68,14 +68,31 @@ class ImageFile
 {
     Path file;
     string[] tags;
+
+    float[] gps; // lat, lon, alt
+
     Face[] faces;
     string allNames;
+    /// is exifdata read in
     bool metadataRead;
+    /// exifdata if available
     Metadata metadata;
+
     this(Path file)
     {
         this.file = file;
-        this.tags = file.loadTags();
+        auto cacheData = file.loadCache();
+        this.tags = cacheData.tags;
+        this.gps = cacheData.gps;
+        if (this.gps == null)
+        {
+            if (hasMetadata)
+            {
+                auto metadata = getMetadata;
+                this.gps = parseGps(metadata.position, metadata.altitude);
+                file.storeCache(this.tags, this.gps);
+            }
+        }
     }
 
     void addTag(string tag)
@@ -84,7 +101,7 @@ class ImageFile
         {
             tags ~= tag;
             tags.sort;
-            file.storeTags(tags);
+            file.storeCache(tags, gps);
         }
     }
 
@@ -93,7 +110,7 @@ class ImageFile
         if (hasTag(tag))
         {
             tags = tags.remove!(i => i == tag);
-            file.storeTags(tags);
+            file.storeCache(tags, gps);
         }
     }
 
@@ -149,16 +166,48 @@ class ImageFile
     }
 }
 
+float[] parseGps(string latLonString, string altitudeString)
+{
+    float[] result;
+    auto latLon = latLonString.matchFirst(regex(`(?P<lat>[\d\.]+) ., (?P<lon>[\d\.]+) .`));
+    if (!latLon.empty)
+    {
+        result ~= latLon["lat"].to!float;
+        result ~= latLon["lon"].to!float;
+        auto alt = altitudeString.matchFirst(regex(`(?P<altitude>\d+) m`));
+        if (!alt.empty)
+        {
+            result ~= alt["altitude"].to!float;
+        }
+    }
+    return result;
+}
+
+@("parseGps") unittest
+{
+    float[] result = parseGps("48.14211389 N, 11.58691944 E", "557 m Above Sea Level");
+    result[0].should ~ 48.142;
+    result[1].should ~ 11.586;
+    result[2].should ~ 557.0;
+}
+
 @serdeIgnoreUnexpectedKeys struct Metadata
 {
     @serdeKeys("CreateDate") @serdeOptional @("Creation Date")
     string creationDate;
 
+    @serdeKeys("GPSPosition") @serdeOptional @("GPS Position")
+    string position;
+
+    @serdeKeys("GPSAltitude") @serdeOptional @("GPS Altitude")
+    string altitude;
+
     public static auto read(Path file)
     {
-        auto exiftool = execute(["exiftool", "-json", file.toString()]);
+        auto exiftool = execute(["exiftool", "-coordFormat", "%.8f", "-json", file.toString()]);
         if (exiftool.status != 0)
         {
+            writeln("exiftool failed");
             return Metadata.init;
         }
 
@@ -259,6 +308,15 @@ class Files
 
     auto front()
     {
+        try {
+            if (filteredFiles.empty) {
+                throw new Exception("filtered files empty");
+            }
+        }
+        catch (Exception e)
+        {
+            writeln(e.info.toString);
+        }
         return filteredFiles[currentIndex];
     }
 
@@ -300,12 +358,20 @@ class Files
 
     void update()
     {
-        auto current = front;
-        runFilter();
-        currentIndex = filteredFiles.countUntil(current);
-        if (currentIndex == -1)
+        if (empty)
         {
+            runFilter();
             currentIndex = 0;
+        }
+        else
+        {
+            auto current = front;
+            runFilter();
+            currentIndex = filteredFiles.countUntil(current);
+            if (currentIndex == -1)
+            {
+                currentIndex = 0;
+            }
         }
     }
 
@@ -500,7 +566,10 @@ static class State
 
     auto updateAndStore(Files files, Args args)
     {
-        indices[key(args)] = files.front.file.toString;
+        if (files.empty)
+        {
+            return this;
+        }
         version (unittest)
         {
         }
@@ -663,7 +732,7 @@ public void viewedMain(Args args)
     State state = readStatefile();
     auto files = getFiles(args);
     state.update(files, args);
-    string progress = "Scanning for stuff";
+    string deepfaceProgress = "Deepface: ...";
     bool showFaces = false;
     bool renderFaces = false;
     bool showMetadata = false;
@@ -770,18 +839,28 @@ public void viewedMain(Args args)
                                    xPos, yPos, width, height,
                                    ()
                                    {
-                                       string title = "Files %d/%d/%d".format(files.currentIndex + 1,
+                                       string title = "Files %s/%d/%d".format(files.empty ? "-" : (files.currentIndex + 1).to!string,
                                                                               files.filteredFiles.length,
                                                                               files.files.length);
                                        gui.label(title);
                                        if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
-                                           auto currentFile = files.front;
-                                           auto currentCount = files.filteredFiles.length;
-                                           files.update();
-                                           if ((currentFile != files.front) || (currentCount != files.filteredFiles.length)) {
+                                           if (files.empty)
+                                           {
+                                               files.update();
                                                state = state.updateAndStore(files, args);
                                                imageChangedExternally = true;
                                                loadImage();
+                                           }
+                                           else
+                                           {
+                                               auto currentFile = files.front;
+                                               auto currentCount = files.filteredFiles.length;
+                                               files.update();
+                                               if (!files.empty && (currentFile != files.front) || (currentCount != files.filteredFiles.length)) {
+                                                   state = state.updateAndStore(files, args);
+                                                   imageChangedExternally = true;
+                                                   loadImage();
+                                               }
                                            }
                                        }
                                    },
@@ -814,6 +893,10 @@ public void viewedMain(Args args)
     private void loadImage()
     {
         // dfmt off
+        if (files.empty)
+        {
+            return;
+        }
         auto currentImage = files.front;
         spawn(
             &loadNextImageSpawnable,
@@ -853,6 +936,8 @@ public void viewedMain(Args args)
                 gui.label("Info");
             }, () {
                 xPos += width;
+                if (files.empty) return;
+
                 auto imageFile = files.front;
                 auto imageFileName = imageFile.file;
                 if (gui.collapse("Basic info", "", &showBasicInfo))
@@ -987,7 +1072,7 @@ public void viewedMain(Args args)
                                {
                                    zoomImage(window, currentImageDimension, oldZoom, zoom);
                                }
-                               gui.label(progress);
+                               gui.label(deepfaceProgress);
                            }, false, window.width - 2 * BORDER - Sizes.SCROLL_BAR_SIZE);
             // dfmt on
             height -= scrollHeight + BORDER;
@@ -1139,11 +1224,14 @@ while (!window.window.glfwWindowShouldClose())
                        (LinkTerminated terminated)
                        {
                            writeln(terminated);
-                           writeln("deepface terminated");
+                           if (terminated.tid == deepface)
+                           {
+                               writeln("deepface terminated");
+                           }
                        },
-                       (DeepfaceProgress p)
+                       (DeepfaceProgress deepfaceProgressMessage)
                        {
-                           progress = p.message;
+                           deepfaceProgress = deepfaceProgressMessage.message;
                        },
                        (immutable(FacesFound) found)
                        {

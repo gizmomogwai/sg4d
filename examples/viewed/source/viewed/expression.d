@@ -1,16 +1,18 @@
 module viewed.expression;
 
-import pc4d.parsers : alnum, lazyParser, regex, Regex;
 import pc4d.parser : Parser;
-import std.string : format;
+import pc4d.parsers : alnum, lazyParser, regex, Regex;
 import std.algorithm : all, any, map, find;
-import std.range : ElementType, empty;
-import std.array : array;
-import std.functional : toDelegate;
-import std.variant : Variant, variantArray;
 import std.algorithm : countUntil, any, startsWith;
-import viewed : ImageFile;
+import std.array : array;
+import std.conv : to;
 import std.exception : enforce;
+import std.functional : toDelegate;
+import std.math : sqrt;
+import std.range : ElementType, empty;
+import std.string : format;
+import std.variant : Variant, variantArray;
+import viewed : ImageFile, Path;
 
 version (unittest)
 {
@@ -71,7 +73,7 @@ class DelegateCallPredicate : Predicate
 
 auto alnumWithSlash()
 {
-    return new Regex(`-?[\w\d/]+`, true) ^^ (data) {
+    return new Regex(`-?[\.\w\d/\\-]+`, true) ^^ (data) {
         return variantArray(data[0]);
     };
 }
@@ -152,11 +154,46 @@ bool hasUnreviewedFaces(ImageFile imageFile)
     return imageFile.faces.any!(face => !face.done);
 }
 
-bool fileIncludes(ImageFile imageFile, TagPredicate tagPredicate)
+bool pathIncludes(ImageFile imageFile, TagPredicate tagPredicate)
 {
     return !imageFile.file.toString.find(tagPredicate.tag).empty;
 }
 
+bool hasGps(ImageFile imageFile)
+{
+    return imageFile.gps != null;
+}
+
+bool nearLatLon(ImageFile imageFile, TagPredicate[] arguments)
+{
+    import std.stdio : writeln;
+    if (imageFile.gps == null)
+    {
+        return false;
+    }
+
+    if (arguments.length >= 2)
+    {
+        float lat = arguments[0].tag.to!float;
+        float lon = arguments[1].tag.to!float;
+        float distance = 0.1;
+        if (arguments.length == 3)
+        {
+            distance = arguments[2].tag.to!float;
+        }
+
+        return calcDistance(imageFile.gps, [lat, lon]) < distance;
+    }
+    return true;
+}
+
+float calcDistance(float[] from, float[] to)
+{
+    float dx = to[0] -from[0];
+    float dy = to[1] -from[1];
+    return sqrt(dx*dx + dy*dy);
+}
+                      
 string delegateBody(T...)()
 {
     import std.format : format;
@@ -182,7 +219,7 @@ string delegateBody(T...)()
 }
 
 /++
- + The parser calls registerd delegates with (ImageFile, Variant[]).
+ + The parser calls registerd delegates with (ImageFile, Variant[]). The Variants contain subclasses of Predicate.
  + Register a "normal" delegates whose arguments are automatically extracted from the variants.
  + The mapping from variants to normal types follows the following strategy:
  + - all delegates need to take at least ImageFile as first parameter
@@ -208,7 +245,9 @@ Delegates registerDelegates()
     delegates.wire!("tagStartsWith")(toDelegate(&tagStartsWith));
     delegates.wire!("hasFaces")(toDelegate(&hasFaces));
     delegates.wire!("hasUnreviewedFaces")(toDelegate(&hasUnreviewedFaces));
-    delegates.wire!("fileIncludes")(toDelegate(&fileIncludes));
+    delegates.wire!("pathIncludes")(toDelegate(&pathIncludes));
+    delegates.wire!("hasGps")(toDelegate(&hasGps));
+    delegates.wire!("nearLatLon")(toDelegate(&nearLatLon));
     return delegates;
 }
 
@@ -222,8 +261,6 @@ auto predicateForExpression(string s)
 
 @("expression parser") unittest
 {
-    import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto p = predicateForExpression("abc");
@@ -296,10 +333,18 @@ auto predicateForExpression(string s)
     p.test(imageFile).should == false;
 }
 
+@("pathIncludes") unittest
+{
+    ImageFile imageFile = new ImageFile(Path("abc/def-1/test"));
+    auto p = predicateForExpression("(pathIncludes abc/def-1)");
+    p.test(imageFile).should == true;
+
+    p = predicateForExpression("(pathIncludes abc/def-2)");
+    p.test(imageFile).should == false;
+}
+
 @("not without arguments raises expection") unittest
 {
-    import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto p = predicateForExpression("(not)");
@@ -308,8 +353,6 @@ auto predicateForExpression(string s)
 
 @("tagStartsWith without arguments raises exception") unittest
 {
-    import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto p = predicateForExpression("(tagStartsWith)");
@@ -318,8 +361,6 @@ auto predicateForExpression(string s)
 
 @("tagStartsWith with too many arguments raises exception") unittest
 {
-    import thepath : Path;
-
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
     auto p = predicateForExpression("(tagStartsWith a b)");
@@ -328,7 +369,6 @@ auto predicateForExpression(string s)
 
 @("parseExpression") unittest
 {
-    import thepath : Path;
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
     auto p = predicateForExpression("abc");
@@ -340,7 +380,6 @@ auto predicateForExpression(string s)
 
 @("calling unknown function") unittest
 {
-    import thepath : Path;
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
     auto p = predicateForExpression("(unknown)");

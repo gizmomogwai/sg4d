@@ -32,5 +32,5 @@ configuration "unittest" {
 	targetPath "../../out/tests"
 	excludedSourceFiles "source/main.d"
 	versions "GL_33"
-	postRunCommands "$DUB run lst2errormessages || true"
+	//postRunCommands "$DUB run lst2errormessages || true"
 }

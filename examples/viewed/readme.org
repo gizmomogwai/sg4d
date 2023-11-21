@@ -1,10 +1,21 @@
 #+TODO: TODO IN-PROGRESS | DONE WONT-DO
 
+* Prerequisites
+** Font:
 Please put droidsans.ttf to ~/.config/viewed/font.ttf
+** deppfaceIdentities
+Please put your identities to ~/.config/deepfaceIdentities
+** Please install deepface https://github.com/serengil/deepface
+** Please install exiftool brew install exiftool
 
 * BUGS
-** TODO filter with 0 hits crashes program (e.g. (tagStartsWith notExistent)
-
+** DONE filter with 0 hits crashes program (e.g. (tagStartsWith notExistent)
+CLOSED: [2023-11-16 Thu 22:16]
+- CLOSING NOTE [2023-11-16 Thu 22:16]
+** TODO do gps extractions from metadata
+43°56'11.3"N 1°21'21.1"W == 43.936472, -1.355861
+1' == 1/60, 1" == 1/3600, W == -, N == +, E == +, S == -
+exiftool -coordFormat '%.6f' does the conversion already 
 * Ideas
 ** TODO replace legacy iotd=true properties file
 ** DONE add filter to files list ...
