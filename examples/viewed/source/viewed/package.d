@@ -28,7 +28,7 @@ import std.datetime.systime : SysTime, Clock;
 import std.conv : to;
 import std.array : array, join;
 import std.exception : enforce;
-import std.file : DirEntry, dirEntries, SpanMode, readText, write, exists, getSize;
+import std.file : SpanMode, readText, write, exists, getSize;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.process : execute;
@@ -38,7 +38,7 @@ import std.stdio : writeln;
 import viewed.expression;
 public import thepath : Path;
 import viewed.tags : identityTag, loadCache, storeCache;
-
+import progressbar : withTextUi;
 version (unittest)
 {
     import unit_threaded : should, shouldApproxEqual;
@@ -84,13 +84,21 @@ class ImageFile
         auto cacheData = file.loadCache();
         this.tags = cacheData.tags;
         this.gps = cacheData.gps;
-        if (this.gps == null)
+        if (
+            !cacheData.found
+            // in a transition period it could be that old caches are used, that do not yet contain existing gps.
+            // out of a transition period the cache data should always be complete
+            // || this.gps == null
+        )
         {
             if (hasMetadata)
             {
                 auto metadata = getMetadata;
                 this.gps = parseGps(metadata.position, metadata.altitude);
-                file.storeCache(this.tags, this.gps);
+                if (this.gps != null)
+                {
+                    file.storeCache(this.tags, this.gps);
+                }
             }
         }
     }
@@ -217,7 +225,7 @@ float[] parseGps(string latLonString, string altitudeString)
         }
         else
         {
-            writeln(exiftool.output);
+            // writeln(exiftool.output);
             auto result = deserializeJson!(Metadata[])(exiftool.output);
             return result[0];
         }
@@ -231,7 +239,7 @@ class Files
     public bool filterState;
     public ImageFile[] filteredFiles;
     size_t currentIndex;
-    enum IMAGE_PATTERN = "{*.jpg,*.png}";
+    enum IMAGE_PATTERN = "{*.jpg,*.JPG,*.jpeg,*.JPEG*.png,*.PNG}";
     Face[] faces;
     this(Path directory)
     {
@@ -241,6 +249,8 @@ class Files
             .filter!(f => f.toString().find(".deepface").empty)
             .array
             .sort
+            .array
+            .withTextUi("%>20P%>3p")
             .map!(entry => new ImageFile(entry))
             .array;
         // dfmt on
@@ -256,6 +266,7 @@ class Files
 
     this(Path[] directories)
     {
+        /+
         // dfmt off
         files = directories.map!(
             dir => dir
@@ -263,6 +274,7 @@ class Files
                 .filter!(f => f.toString().find(".deepface").empty)
                 .array
                 .sort
+                .withTextUi
                 .map!(entry => new ImageFile(entry))
             )
             .joiner
@@ -270,6 +282,7 @@ class Files
         // dfmt on
         runFilter();
         init();
+        +/
     }
 
     void runFilter()
@@ -963,6 +976,11 @@ public void viewedMain(Args args)
                         gui.label("Error:");
                         gui.value(currentError);
                         gui.separatorLine();
+                    }
+                    if (imageFile.gps !is null)
+                    {
+                        gui.label("GPS:");
+                        gui.value(imageFile.gps.to!string);
                     }
                     gui.label("Load duration:");
                     gui.value(currentLoadDuration.to!string);

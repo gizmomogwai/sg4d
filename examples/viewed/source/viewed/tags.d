@@ -17,47 +17,57 @@ string identityTag(string identity) => format!("identity:%s")(identity);
 
 auto toTagsPath(Path imagePath)
 {
-    return Path(imagePath.toString() ~ ".tags");
+    return Path(imagePath.toString() ~ ".cache");
 }
 
 auto loadCache(Path imagePath)
 {
+    if (!imagePath.exists)
+    {
+        CacheData result;
+        return result;
+    }
+
     auto tagsPath = imagePath.toTagsPath();
-    
     if (tagsPath.exists())
     {
         return tagsPath.readFileText.loadCacheFile();
     }
+
     auto propertiesFile = Path(imagePath.toString() ~ ".properties");
     if (propertiesFile.exists())
     {
         auto fromFile = propertiesFile.readFileText.loadJavaProperties();
-        tagsPath.storeCache(fromFile, []);
+        imagePath.storeCache(fromFile, []);
         CacheData result;
+        result.found = true;
         result.tags = fromFile;
         return result;
     }
     CacheData result;
+    imagePath.storeCache(result.tags, result.gps);
     return result;
 }
 
 auto storeCache(Path imagePath, string[] tags, float[] gps)
 {
     auto tagsPath = imagePath.toTagsPath();
-    if (tags.empty && gps == null)
+    /+
+    if (tags.empty && gps.empty)
     {
         if (tagsPath.exists)
         {
-            tagsPath.remove();
+            //tagsPath.remove();
         }
     }
     else
     {
+    +/
         tagsPath.writeFile(toCacheFileContent(tags, gps));
-    }
+        //}
 }
 
-alias CacheData = Tuple!(string[], "tags", float[], "gps");
+alias CacheData = Tuple!(bool, "found", string[], "tags", float[], "gps");
 
 private auto loadCacheFile(string content)
 {
@@ -70,12 +80,10 @@ private auto loadCacheFile(string content)
     float[] gps;
     if (lines.length > 1)
     {
-        if (lines[1] != "no")
-        {
-            gps = lines[1].split(",").map!("a.to!float").array;
-        }
+        gps = lines[1].split(",").map!(i => i.to!(float)).array;
     }
     CacheData result;
+    result.found = true;
     result.tags = tags;
     result.gps = gps;
 
@@ -101,7 +109,7 @@ string toCacheFileContent(string[] tags, float[] gps)
 {
     return format!("%s\n%s\n")(
         tags.join(","),
-        (gps == null) ? "no" : gps.map!("a.to!string").join(",")
+        gps.map!("a.to!string").join(",")
     );
 }
 

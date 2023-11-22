@@ -9,7 +9,7 @@ import std.conv : to;
 import std.exception : enforce;
 import std.functional : toDelegate;
 import std.math : sqrt;
-import std.range : ElementType, empty;
+import std.range : ElementType, empty, front;
 import std.string : format;
 import std.variant : Variant, variantArray;
 import viewed : ImageFile, Path;
@@ -20,11 +20,10 @@ version (unittest)
 }
 
 alias StringParser = Parser!(immutable(char));
-alias PredicateDelegate = bool delegate(ImageFile, Variant[]);
-alias Delegates = PredicateDelegate[string];
 
 abstract class Predicate
 {
+    void init(Variant[] args) {}
     abstract bool test(ImageFile image);
 }
 
@@ -35,7 +34,6 @@ class TagPredicate : Predicate
     {
         this.tag = tag;
     }
-
     override bool test(ImageFile image)
     {
         foreach (tag; image.tags)
@@ -49,46 +47,192 @@ class TagPredicate : Predicate
     }
 }
 
-class DelegateCallPredicate : Predicate
+
+class CallPredicate : Predicate
 {
-    Delegates delegates;
-    string delegateName;
     Variant[] arguments;
-    this(Delegates delegates, string delegateName, Variant[] arguments)
+    Predicate predicate;
+    static string[string] names;
+    static this() {
+        names= [
+            "and" : "viewed.expression.AndPredicate",
+            "hasFaces" : "viewed.expression.HasFacesPredicate",
+            "hasGps" : "viewed.expression.HasGpsPredicate",
+            "hasUnreviewedFaces" : "viewed.expression.HasUnreviewedFacesPredicate",
+            "nearLatLon" :"viewed.expression.NearLatLonPredicate",
+            "not" : "viewed.expression.NotPredicate",
+            "or" : "viewed.expression.OrPredicate",
+            "tagStartsWith" : "viewed.expression.TagStartsWithPredicate",
+            "pathIncludes" : "viewed.expression.PathIncludesPredicate",
+        ];
+    }
+
+    this(string shortName, Variant[] arguments)
     {
-        this.delegates = delegates;
-        this.delegateName = delegateName;
         this.arguments = arguments;
+        (shortName in names).enforce("'" ~ shortName ~ "' not registered");
+        predicate = cast(Predicate)Object.factory(names[shortName]);
+        predicate.init(arguments);
     }
 
     override bool test(ImageFile imageFile)
     {
-        if (delegateName !in delegates)
-        {
-            throw new Exception(format!("Unknown function '%s'")(delegateName));
-        }
-        return delegates[delegateName](imageFile, arguments);
+        return predicate.test(imageFile);
     }
 }
 
-auto alnumWithSlash()
+float calcDistance(float[] from, float[] to)
 {
-    return new Regex(`-?[\.\w\d/\\-]+`, true) ^^ (data) {
-        return variantArray(data[0]);
-    };
+    float dx = to[0] -from[0];
+    float dy = to[1] -from[1];
+    return sqrt(dx*dx + dy*dy);
+}
+
+class NearLatLonPredicate : Predicate
+{
+    float latitude;
+    float longitude;
+    float distance = 0.1;
+    override void init(Variant[] args)
+    {
+        if (args.length >= 2)
+        {
+            latitude = args[0].get!TagPredicate.tag.to!float;
+            longitude = args[1].get!TagPredicate.tag.to!float;
+            if (args.length == 3)
+            {
+                distance = args[2].get!TagPredicate.tag.to!float;
+            }
+        }
+    }
+
+    override bool test(ImageFile imageFile)
+    {
+        if (imageFile.gps is null)
+        {
+            return false;
+        }
+        return calcDistance(imageFile.gps, [latitude, longitude]) < distance;
+    }
+}
+
+class HasGpsPredicate : Predicate
+{
+    override bool test(ImageFile imageFile)
+    {
+        return imageFile.gps !is null;
+    }
+}
+
+class AndPredicate : Predicate
+{
+    Predicate[] predicates;
+    override void init(Variant[] args)
+    {
+        (args.length > 0).enforce("'and' needs at least one argument");
+        foreach (arg; args)
+        {
+            predicates ~= arg.get!Predicate;
+        }
+    }
+    override bool test(ImageFile imageFile)
+    {
+        return predicates.all!(p => p.test(imageFile));
+    }
+}
+
+class OrPredicate : Predicate
+{
+    Predicate[] predicates;
+    override void init(Variant[] args)
+    {
+        (args.length > 0).enforce("'or' needs at least one argument");
+        foreach (arg; args)
+        {
+            predicates ~= arg.get!Predicate;
+        }
+    }
+    override bool test(ImageFile imageFile)
+    {
+        return predicates.any!(p => p.test(imageFile));
+    }
+}
+
+class NotPredicate : Predicate
+{
+    Predicate predicate;
+    override void init(Variant[] args)
+    {
+        (args.length == 1).enforce("'not' needs exactly one argument");
+        predicate = args.front.get!Predicate;
+    }
+    override bool test(ImageFile imageFile)
+    {
+        return !predicate.test(imageFile);
+    }
+}
+
+class TagStartsWithPredicate : Predicate
+{
+    string prefix;
+    override void init(Variant[] args)
+    {
+        (args.length == 1).enforce("'tagStartsWith' needs exactly one argument");
+        prefix = args.front.get!TagPredicate.tag;
+    }
+    override bool test(ImageFile imageFile)
+    {
+        return imageFile.tags.any!(t => t.startsWith(prefix));
+    }
+}
+
+class HasFacesPredicate : Predicate
+{
+    override bool test(ImageFile imageFile)
+    {
+        return imageFile.faces !is null;
+    }
+}
+
+class HasUnreviewedFacesPredicate : Predicate
+{
+    override bool test(ImageFile imageFile)
+    {
+        if (imageFile.faces is null)
+        {
+            return false;
+        }
+        return imageFile.faces.any!(face => !face.done);
+    }
+}
+
+class PathIncludesPredicate : Predicate
+{
+    string part;
+    override void init(Variant[] args)
+    {
+        (args.length == 1).enforce("'pathIncludes' needs exactly one argument");
+        part = args.front.get!TagPredicate.tag;
+    }
+
+    override bool test(ImageFile imageFile)
+    {
+        return !imageFile.file.toString.find(part).empty;
+    }
 }
 
 class ExpressionParser
 {
-    Delegates delegates;
-    this(Delegates delegates)
+    static auto alnumWithSlash()
     {
-        this.delegates = delegates;
+        return new Regex(`-?[\.\w\d/\\-]+`, true) ^^ (data) {
+            return variantArray(data[0]);
+        };
     }
 
     StringParser expression()
     {
-        return delegateCall() | terminal();
+        return call() | terminal();
     }
 
     StringParser lazyExpression()
@@ -103,12 +247,12 @@ class ExpressionParser
         };
     }
 
-    StringParser delegateCall()
+    StringParser call()
     {
         return (regex("\\s*\\(\\s*",
-                false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
-                data) {
-            return variantArray(new DelegateCallPredicate(delegates, data[0].get!string, data[1 .. $]));
+                      false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
+                          data) {
+            return variantArray(new CallPredicate(data[0].get!string, data[1 .. $]));
         };
     }
 
@@ -118,145 +262,12 @@ class ExpressionParser
     }
 }
 
-bool andPredicate(ImageFile imageFile, Predicate[] arguments)
-{
-    enforce(arguments.length > 0, "and needs at least one argument");
-    return arguments.all!(p => p.test(imageFile));
-}
-
-bool orPredicate(ImageFile imageFile, Predicate[] arguments)
-{
-    enforce(arguments.length > 0, "or needs at least one argument");
-    return arguments.any!(p => p.test(imageFile));
-}
-
-bool notPredicate(ImageFile imageFile, Predicate argument)
-{
-    return !argument.test(imageFile);
-}
-
-bool tagStartsWith(ImageFile imageFile, TagPredicate tagPredicate)
-{
-    return imageFile.tags.any!(t => t.startsWith(tagPredicate.tag));
-}
-
-bool hasFaces(ImageFile imageFile)
-{
-    return imageFile.faces !is null;
-}
-
-bool hasUnreviewedFaces(ImageFile imageFile)
-{
-    if (imageFile.faces is null)
-    {
-        return false;
-    }
-    return imageFile.faces.any!(face => !face.done);
-}
-
-bool pathIncludes(ImageFile imageFile, TagPredicate tagPredicate)
-{
-    return !imageFile.file.toString.find(tagPredicate.tag).empty;
-}
-
-bool hasGps(ImageFile imageFile)
-{
-    return imageFile.gps != null;
-}
-
-bool nearLatLon(ImageFile imageFile, TagPredicate[] arguments)
-{
-    import std.stdio : writeln;
-    if (imageFile.gps == null)
-    {
-        return false;
-    }
-
-    if (arguments.length >= 2)
-    {
-        float lat = arguments[0].tag.to!float;
-        float lon = arguments[1].tag.to!float;
-        float distance = 0.1;
-        if (arguments.length == 3)
-        {
-            distance = arguments[2].tag.to!float;
-        }
-
-        return calcDistance(imageFile.gps, [lat, lon]) < distance;
-    }
-    return true;
-}
-
-float calcDistance(float[] from, float[] to)
-{
-    float dx = to[0] -from[0];
-    float dy = to[1] -from[1];
-    return sqrt(dx*dx + dy*dy);
-}
-                      
-string delegateBody(T...)()
-{
-    import std.format : format;
-    import std.traits : isArray;
-
-    static if ((T.length == 2) && (isArray!(T[1])))
-    {
-        return format("return f(file, args.map!(i => i.get!(%s)).array);",
-                ElementType!(T[1]).stringof);
-    }
-    else
-    {
-        string result = format("enforce(args.length == %s, \"'\" ~ name ~ \"' needs exactly %s arguments\");",
-                T.length - 1, T.length - 1);
-        result ~= "return f(file";
-        static foreach (i; 1 .. T.length)
-        {
-            result ~= format(", args[%s].get!(%s)", i - 1, T[i].stringof);
-        }
-        result ~= ");";
-        return result;
-    }
-}
-
 /++
- + The parser calls registerd delegates with (ImageFile, Variant[]). The Variants contain subclasses of Predicate.
- + Register a "normal" delegates whose arguments are automatically extracted from the variants.
- + The mapping from variants to normal types follows the following strategy:
- + - all delegates need to take at least ImageFile as first parameter
- + - then they can take 0..n other non array types which are automatically taken out of the variant array
- + - or take one array type which elements are taken out of the variant array
- + If you want more control over the conversion add normal delegates to "delegates".
- +/
-void wire(string name, Arguments...)(ref Delegates delegates, bool delegate(Arguments) f)
-{
-    const s = "delegates[name] = delegate(ImageFile file, Variant[] args) {"
-        ~ delegateBody!(Arguments)() ~ "};";
-    // pragma(msg, name~ ":");
-    // pragma(msg, s);
-    mixin(s);
-}
-
-Delegates registerDelegates()
-{
-    Delegates delegates;
-    delegates.wire!("or")(toDelegate(&orPredicate));
-    delegates.wire!("and")(toDelegate(&andPredicate));
-    delegates.wire!("not")(toDelegate(&notPredicate));
-    delegates.wire!("tagStartsWith")(toDelegate(&tagStartsWith));
-    delegates.wire!("hasFaces")(toDelegate(&hasFaces));
-    delegates.wire!("hasUnreviewedFaces")(toDelegate(&hasUnreviewedFaces));
-    delegates.wire!("pathIncludes")(toDelegate(&pathIncludes));
-    delegates.wire!("hasGps")(toDelegate(&hasGps));
-    delegates.wire!("nearLatLon")(toDelegate(&nearLatLon));
-    return delegates;
-}
-
-/++
- + Convenience function to parse an expression and return the matcher.
+ + Convenience function to parse an expression and return the predicate.
  +/
 auto predicateForExpression(string s)
 {
-    return new ExpressionParser(registerDelegates()).expression().parse(s).results[0].get!Predicate;
+    return new ExpressionParser().expression().parse(s).results[0].get!Predicate;
 }
 
 @("expression parser") unittest
@@ -347,24 +358,21 @@ auto predicateForExpression(string s)
 {
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto p = predicateForExpression("(not)");
-    p.test(imageFile).shouldThrow;
+    predicateForExpression("(not)").shouldThrow;
 }
 
 @("tagStartsWith without arguments raises exception") unittest
 {
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto p = predicateForExpression("(tagStartsWith)");
-    p.test(imageFile).shouldThrow;
+    predicateForExpression("(tagStartsWith)").shouldThrow;
 }
 
 @("tagStartsWith with too many arguments raises exception") unittest
 {
     ImageFile imageFile = new ImageFile(Path("gibt nicht"));
 
-    auto p = predicateForExpression("(tagStartsWith a b)");
-    p.test(imageFile).shouldThrow;
+    predicateForExpression("(tagStartsWith a b)").shouldThrow;
 }
 
 @("parseExpression") unittest
@@ -382,6 +390,23 @@ auto predicateForExpression(string s)
 {
     ImageFile imageFile = new ImageFile(Path("gibts nicht"));
 
-    auto p = predicateForExpression("(unknown)");
-    p.test(imageFile).shouldThrow;
+    predicateForExpression("(unknown)").shouldThrow;
 }
+
+@("nearLatLon") unittest
+{
+    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+
+    auto p = predicateForExpression("(nearLatLon 1.1 2.2 0.1)");
+    p.test(imageFile).should == false;
+
+    imageFile.gps = [1.1, 2.2];
+    p.test(imageFile).should == true;
+
+    imageFile.gps = [2.0, 3.0];
+    p.test(imageFile).should == false;
+
+    imageFile.gps = [2.0, 3.0, 5.0];
+    p.test(imageFile).should == false;
+}
+

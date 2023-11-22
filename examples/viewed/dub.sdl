@@ -8,6 +8,7 @@ dependency "thepath" version="~>1.0.0"
 dependency "sg4d" path="../.."
 dependency "pc4d" version="~>1.0.10"
 dependency "mir-ion" version="~>2.2.0"
+dependency "progressbar" version="*"
 targetType "executable"
 
 configuration "opengl2" {

@@ -6,4 +6,11 @@
 
 import unit_threaded;
 
-mixin runTestsMain!("viewed", "viewed.expression", "deepface", "viewed.tags");
+// dfmt off
+mixin runTestsMain!(
+    "deepface",
+    "viewed",
+    "viewed.expression",
+    "viewed.tags"
+);
+// dfmt on
