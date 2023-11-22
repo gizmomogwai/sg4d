@@ -7,7 +7,7 @@ import std.format : format;
 import std.range : empty;
 import thepath : Path;
 import std.typecons : Tuple;
-
+import std.string :replace;
 version (unittest)
 {
     import unit_threaded : should;
@@ -15,12 +15,13 @@ version (unittest)
 
 string identityTag(string identity) => format!("identity:%s")(identity);
 
-auto toTagsPath(Path imagePath)
+auto toTagsPath(Path imagePath, Path baseDirectory)
 {
-    return Path(imagePath.toString() ~ ".cache");
+    string base = baseDirectory.to!string;
+    return Path(base ~ "/.viewed/" ~ imagePath.toString().replace(base, "") ~ ".cache");
 }
 
-auto loadCache(Path imagePath)
+auto loadCache(Path imagePath, Path baseDirectory)
 {
     if (!imagePath.exists)
     {
@@ -28,7 +29,7 @@ auto loadCache(Path imagePath)
         return result;
     }
 
-    auto tagsPath = imagePath.toTagsPath();
+    auto tagsPath = imagePath.toTagsPath(baseDirectory);
     if (tagsPath.exists())
     {
         return tagsPath.readFileText.loadCacheFile();
@@ -38,33 +39,22 @@ auto loadCache(Path imagePath)
     if (propertiesFile.exists())
     {
         auto fromFile = propertiesFile.readFileText.loadJavaProperties();
-        imagePath.storeCache(fromFile, []);
+        imagePath.storeCache(baseDirectory, fromFile, []);
         CacheData result;
         result.found = true;
         result.tags = fromFile;
         return result;
     }
     CacheData result;
-    imagePath.storeCache(result.tags, result.gps);
+    imagePath.storeCache(baseDirectory, result.tags, result.gps);
     return result;
 }
 
-auto storeCache(Path imagePath, string[] tags, float[] gps)
+auto storeCache(Path imagePath, Path baseDirectory, string[] tags, float[] gps)
 {
-    auto tagsPath = imagePath.toTagsPath();
-    /+
-    if (tags.empty && gps.empty)
-    {
-        if (tagsPath.exists)
-        {
-            //tagsPath.remove();
-        }
-    }
-    else
-    {
-    +/
-        tagsPath.writeFile(toCacheFileContent(tags, gps));
-        //}
+    auto cachePath = imagePath.toTagsPath(baseDirectory);
+    cachePath.parent().mkdir(true);
+    cachePath.writeFile(toCacheFileContent(tags, gps));
 }
 
 alias CacheData = Tuple!(bool, "found", string[], "tags", float[], "gps");

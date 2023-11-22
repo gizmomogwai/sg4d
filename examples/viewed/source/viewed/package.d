@@ -67,6 +67,7 @@ string formatBigNumber(T)(const T number)
 class ImageFile
 {
     Path file;
+    Path baseDirectory;
     string[] tags;
 
     float[] gps; // lat, lon, alt
@@ -78,10 +79,11 @@ class ImageFile
     /// exifdata if available
     Metadata metadata;
 
-    this(Path file)
+    this(Path baseDirectory, Path file)
     {
         this.file = file;
-        auto cacheData = file.loadCache();
+        this.baseDirectory = baseDirectory;
+        auto cacheData = file.loadCache(baseDirectory);
         this.tags = cacheData.tags;
         this.gps = cacheData.gps;
         if (
@@ -97,7 +99,7 @@ class ImageFile
                 this.gps = parseGps(metadata.position, metadata.altitude);
                 if (this.gps != null)
                 {
-                    file.storeCache(this.tags, this.gps);
+                    file.storeCache(baseDirectory, this.tags, this.gps);
                 }
             }
         }
@@ -109,7 +111,7 @@ class ImageFile
         {
             tags ~= tag;
             tags.sort;
-            file.storeCache(tags, gps);
+            file.storeCache(baseDirectory, tags, gps);
         }
     }
 
@@ -118,7 +120,7 @@ class ImageFile
         if (hasTag(tag))
         {
             tags = tags.remove!(i => i == tag);
-            file.storeCache(tags, gps);
+            file.storeCache(baseDirectory, tags, gps);
         }
     }
 
@@ -251,7 +253,7 @@ class Files
             .sort
             .array
             .withTextUi("%>20P%>3p")
-            .map!(entry => new ImageFile(entry))
+            .map!(entry => new ImageFile(directory, entry))
             .array;
         // dfmt on
         runFilter();

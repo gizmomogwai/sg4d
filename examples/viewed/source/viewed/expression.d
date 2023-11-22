@@ -272,7 +272,7 @@ auto predicateForExpression(string s)
 
 @("expression parser") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+    ImageFile imageFile = dummyFile;
 
     auto p = predicateForExpression("abc");
     imageFile.tags = ["abc"];
@@ -346,7 +346,7 @@ auto predicateForExpression(string s)
 
 @("pathIncludes") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("abc/def-1/test"));
+    ImageFile imageFile = dummyFile;
     auto p = predicateForExpression("(pathIncludes abc/def-1)");
     p.test(imageFile).should == true;
 
@@ -356,28 +356,35 @@ auto predicateForExpression(string s)
 
 @("not without arguments raises expection") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+    ImageFile imageFile = dummyFile;
 
     predicateForExpression("(not)").shouldThrow;
 }
 
 @("tagStartsWith without arguments raises exception") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+    ImageFile imageFile = dummyFile;
 
     predicateForExpression("(tagStartsWith)").shouldThrow;
 }
 
 @("tagStartsWith with too many arguments raises exception") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+    ImageFile imageFile = dummyFile;
 
     predicateForExpression("(tagStartsWith a b)").shouldThrow;
 }
 
+version (unittest)
+{
+    auto dummyFile()
+    {
+        return new ImageFile(Path("."), Path("gibts nicht.jpg"));
+    }
+}
 @("parseExpression") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibts nicht"));
+    ImageFile imageFile = dummyFile;
 
     auto p = predicateForExpression("abc");
     imageFile.tags = ["abc", "def"];
@@ -388,14 +395,14 @@ auto predicateForExpression(string s)
 
 @("calling unknown function") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibts nicht"));
+    ImageFile imageFile = dummyFile;
 
     predicateForExpression("(unknown)").shouldThrow;
 }
 
 @("nearLatLon") unittest
 {
-    ImageFile imageFile = new ImageFile(Path("gibt nicht"));
+    ImageFile imageFile = dummyFile;
 
     auto p = predicateForExpression("(nearLatLon 1.1 2.2 0.1)");
     p.test(imageFile).should == false;
