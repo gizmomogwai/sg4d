@@ -12,12 +12,18 @@ Please put your identities to ~/.config/deepfaceIdentities
 ** DONE filter with 0 hits crashes program (e.g. (tagStartsWith notExistent)
 CLOSED: [2023-11-16 Thu 22:16]
 - CLOSING NOTE [2023-11-16 Thu 22:16]
-** TODO do gps extractions from metadata
+** DONE do gps extractions from metadata
+CLOSED: [2023-11-23 Thu 19:43]
+- CLOSING NOTE [2023-11-23 Thu 19:43]
 43°56'11.3"N 1°21'21.1"W == 43.936472, -1.355861
 1' == 1/60, 1" == 1/3600, W == -, N == +, E == +, S == -
 exiftool -coordFormat '%.6f' does the conversion already 
 * Ideas
-** TODO replace legacy iotd=true properties file
+** TODO history of filters
+** TODO show cursor when editing
+** DONE replace legacy iotd=true properties file
+CLOSED: [2023-11-23 Thu 19:43]
+- CLOSING NOTE [2023-11-23 Thu 19:43]
 ** DONE add filter to files list ...
 CLOSED: [2023-08-30 Wed 17:47]
 - CLOSING NOTE [2023-08-30 Wed 17:47]
