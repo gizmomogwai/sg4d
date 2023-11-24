@@ -347,7 +347,7 @@ auto predicateForExpression(string s)
 @("pathIncludes") unittest
 {
     ImageFile imageFile = dummyFile;
-    auto p = predicateForExpression("(pathIncludes abc/def-1)");
+    auto p = predicateForExpression("(pathIncludes gib)");
     p.test(imageFile).should == true;
 
     p = predicateForExpression("(pathIncludes abc/def-2)");
