@@ -15,6 +15,7 @@ import gamut : Image;
 import gamut.types : PixelType;
 import gl3n.linalg : vec2, vec3;
 import imagedb : shorten;
+import imgui : Editor;
 import imgui.colorscheme : RGBA;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
@@ -237,7 +238,7 @@ float[] parseGps(string latLonString, string altitudeString)
 class Files
 {
     public ImageFile[] files;
-    private string filter;
+    private Editor filter;
     public bool filterState;
     public ImageFile[] filteredFiles;
     size_t currentIndex;
@@ -268,7 +269,6 @@ class Files
 
     this(Path[] directories)
     {
-        /+
         // dfmt off
         files = directories.map!(
             dir => dir
@@ -276,20 +276,20 @@ class Files
                 .filter!(f => f.toString().find(".deepface").empty)
                 .array
                 .sort
-                .withTextUi
-                .map!(entry => new ImageFile(entry))
+                .array
+                .withTextUi("%>20P%>3p")
+                .map!(entry => new ImageFile(dir, entry))
             )
             .joiner
             .array;
         // dfmt on
         runFilter();
         init();
-        +/
     }
 
     void runFilter()
     {
-        if (filter.empty)
+        if (filter.buffer.empty)
         {
             filteredFiles = files;
             filterState = true;
@@ -298,7 +298,7 @@ class Files
         {
             try
             {
-                auto predicate = filter.predicateForExpression;
+                auto predicate = filter.buffer.predicateForExpression;
                 filteredFiles = files.filter!(f => predicate.test(f)).array;
                 filterState = true;
             }
@@ -858,7 +858,7 @@ public void viewedMain(Args args)
                                                                               files.filteredFiles.length,
                                                                               files.files.length);
                                        gui.label(title);
-                                       if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
+                                       if (gui.textEdit("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
                                            if (files.empty)
                                            {
                                                files.update();
