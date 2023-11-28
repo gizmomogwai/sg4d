@@ -7,7 +7,8 @@ import std.format : format;
 import std.range : empty;
 import thepath : Path;
 import std.typecons : Tuple;
-import std.string :replace;
+import std.string : replace;
+
 version (unittest)
 {
     import unit_threaded : should;
@@ -97,10 +98,7 @@ private auto loadJavaProperties(string content)
 
 string toCacheFileContent(string[] tags, float[] gps)
 {
-    return format!("%s\n%s\n")(
-        tags.join(","),
-        gps.map!("a.to!string").join(",")
-    );
+    return format!("%s\n%s\n")(tags.join(","), gps.map!("a.to!string").join(","));
 }
 
 string toJavaProperties(string[] tags)

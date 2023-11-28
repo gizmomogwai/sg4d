@@ -12,7 +12,8 @@ import std.math : sqrt;
 import std.range : ElementType, empty, front;
 import std.string : format;
 import std.variant : Variant, variantArray;
-import viewed : ImageFile, Path;
+import imagefile : ImageFile;
+import thepath : Path;
 
 version (unittest)
 {
@@ -23,7 +24,10 @@ alias StringParser = Parser!(immutable(char));
 
 abstract class Predicate
 {
-    void init(Variant[] args) {}
+    void init(Variant[] args)
+    {
+    }
+
     abstract bool test(ImageFile image);
 }
 
@@ -34,6 +38,7 @@ class TagPredicate : Predicate
     {
         this.tag = tag;
     }
+
     override bool test(ImageFile image)
     {
         foreach (tag; image.tags)
@@ -47,23 +52,23 @@ class TagPredicate : Predicate
     }
 }
 
-
 class CallPredicate : Predicate
 {
     Variant[] arguments;
     Predicate predicate;
     static string[string] names;
-    static this() {
-        names= [
-            "and" : "viewed.expression.AndPredicate",
-            "hasFaces" : "viewed.expression.HasFacesPredicate",
-            "hasGps" : "viewed.expression.HasGpsPredicate",
-            "hasUnreviewedFaces" : "viewed.expression.HasUnreviewedFacesPredicate",
-            "nearLatLon" :"viewed.expression.NearLatLonPredicate",
-            "not" : "viewed.expression.NotPredicate",
-            "or" : "viewed.expression.OrPredicate",
-            "tagStartsWith" : "viewed.expression.TagStartsWithPredicate",
-            "pathIncludes" : "viewed.expression.PathIncludesPredicate",
+    static this()
+    {
+        names = [
+            "and": "viewed.expression.AndPredicate",
+            "hasFaces": "viewed.expression.HasFacesPredicate",
+            "hasGps": "viewed.expression.HasGpsPredicate",
+            "hasUnreviewedFaces": "viewed.expression.HasUnreviewedFacesPredicate",
+            "nearLatLon": "viewed.expression.NearLatLonPredicate",
+            "not": "viewed.expression.NotPredicate",
+            "or": "viewed.expression.OrPredicate",
+            "tagStartsWith": "viewed.expression.TagStartsWithPredicate",
+            "pathIncludes": "viewed.expression.PathIncludesPredicate",
         ];
     }
 
@@ -71,7 +76,7 @@ class CallPredicate : Predicate
     {
         this.arguments = arguments;
         (shortName in names).enforce("'" ~ shortName ~ "' not registered");
-        predicate = cast(Predicate)Object.factory(names[shortName]);
+        predicate = cast(Predicate) Object.factory(names[shortName]);
         predicate.init(arguments);
     }
 
@@ -83,9 +88,9 @@ class CallPredicate : Predicate
 
 float calcDistance(float[] from, float[] to)
 {
-    float dx = to[0] -from[0];
-    float dy = to[1] -from[1];
-    return sqrt(dx*dx + dy*dy);
+    float dx = to[0] - from[0];
+    float dy = to[1] - from[1];
+    return sqrt(dx * dx + dy * dy);
 }
 
 class NearLatLonPredicate : Predicate
@@ -97,11 +102,17 @@ class NearLatLonPredicate : Predicate
     {
         if (args.length >= 2)
         {
-            latitude = args[0].get!TagPredicate.tag.to!float;
-            longitude = args[1].get!TagPredicate.tag.to!float;
+            latitude = args[0].get!TagPredicate
+                .tag
+                .to!float;
+            longitude = args[1].get!TagPredicate
+                .tag
+                .to!float;
             if (args.length == 3)
             {
-                distance = args[2].get!TagPredicate.tag.to!float;
+                distance = args[2].get!TagPredicate
+                    .tag
+                    .to!float;
             }
         }
     }
@@ -135,6 +146,7 @@ class AndPredicate : Predicate
             predicates ~= arg.get!Predicate;
         }
     }
+
     override bool test(ImageFile imageFile)
     {
         return predicates.all!(p => p.test(imageFile));
@@ -152,6 +164,7 @@ class OrPredicate : Predicate
             predicates ~= arg.get!Predicate;
         }
     }
+
     override bool test(ImageFile imageFile)
     {
         return predicates.any!(p => p.test(imageFile));
@@ -166,6 +179,7 @@ class NotPredicate : Predicate
         (args.length == 1).enforce("'not' needs exactly one argument");
         predicate = args.front.get!Predicate;
     }
+
     override bool test(ImageFile imageFile)
     {
         return !predicate.test(imageFile);
@@ -180,6 +194,7 @@ class TagStartsWithPredicate : Predicate
         (args.length == 1).enforce("'tagStartsWith' needs exactly one argument");
         prefix = args.front.get!TagPredicate.tag;
     }
+
     override bool test(ImageFile imageFile)
     {
         return imageFile.tags.any!(t => t.startsWith(prefix));
@@ -250,8 +265,8 @@ class ExpressionParser
     StringParser call()
     {
         return (regex("\\s*\\(\\s*",
-                      false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
-                          data) {
+                false) ~ alnum!(immutable(char)) ~ (-arguments()) ~ regex("\\s*\\)\\s*", false)) ^^ (
+                data) {
             return variantArray(new CallPredicate(data[0].get!string, data[1 .. $]));
         };
     }
@@ -416,4 +431,3 @@ version (unittest)
     imageFile.gps = [2.0, 3.0, 5.0];
     p.test(imageFile).should == false;
 }
-
