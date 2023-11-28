@@ -20,7 +20,9 @@ CLOSED: [2023-11-23 Thu 19:43]
 exiftool -coordFormat '%.6f' does the conversion already 
 * Ideas
 ** TODO history of filters
-** TODO show cursor when editing
+** DONE show cursor when editing
+CLOSED: [2023-11-28 Tue 21:15]
+- CLOSING NOTE [2023-11-28 Tue 21:15]
 ** DONE replace legacy iotd=true properties file
 CLOSED: [2023-11-23 Thu 19:43]
 - CLOSING NOTE [2023-11-23 Thu 19:43]

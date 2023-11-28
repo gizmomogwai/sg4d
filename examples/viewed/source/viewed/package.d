@@ -827,7 +827,7 @@ public void viewedMain(Args args)
             ImGui!Opengl33 gui;
             Duration renderTime;
             enum BORDER = 20;
-            string newTag;
+            Editor newTag;
             const(ColorScheme) errorColorScheme;
             ColorScheme facesColorScheme;
             this(Window window)
@@ -858,7 +858,7 @@ public void viewedMain(Args args)
                                                                               files.filteredFiles.length,
                                                                               files.files.length);
                                        gui.label(title);
-                                       if (gui.textEdit("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
+                                       if (gui.textInput("Filter: ", files.filter, false, files.filterState ? defaultColorScheme : errorColorScheme)) {
                                            if (files.empty)
                                            {
                                                files.update();
@@ -1003,7 +1003,7 @@ public void viewedMain(Args args)
                     }
                     if (gui.textInput("New tag", newTag))
                     {
-                        imageFile.addTag(newTag);
+                        imageFile.addTag(newTag.buffer);
                     }
                 }
                 if (imageFile.hasMetadata())
