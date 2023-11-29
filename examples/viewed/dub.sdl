@@ -11,16 +11,8 @@ dependency "mir-ion" version="~>2.2.0"
 dependency "progressbar" version="*"
 targetType "executable"
 
-configuration "opengl2" {
-	targetType "executable"
-	targetPath "../../out/opengl2"
-	excludedSourceFiles "source/testsuite.d"
-	versions "Default" "GL_ARB" "GL_AllowDeprecated" "DEBUG_DESTRUCTORS"
-}
-
 configuration "opengl33" {
 	dependency "dimgui:opengl33" version="~master"
-	targetType "executable"
 	targetPath "../../out/opengl33"
 	excludedSourceFiles "source/testsuite.d"
 	versions "GL_33"

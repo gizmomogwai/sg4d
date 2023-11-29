@@ -1,9 +1,9 @@
-module deepface;
+module viewed.deepface;
 
 import std.process : pipeShell, Redirect, ProcessPipes;
 import args : Args;
 import gamut : Image, ImageFormat, PixelType;
-import imagedb : shorten;
+import viewed.imagedb : shorten;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import std.algorithm : map, filter;
 import std.array : split, join, array;

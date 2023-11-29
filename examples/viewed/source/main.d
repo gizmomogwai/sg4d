@@ -1,6 +1,6 @@
 module main;
 
-import viewed;
+import viewed : viewedMain;
 import args : Args;
 import argparse : CLI;
 

@@ -1,13 +1,12 @@
-module imagefile;
+module viewed.imagedb;
 
 import args : Args;
-import deepface : Face;
-import deepface : deepface, Face, calcDeepfaceCachePath, calcDeepfaceJsonPath;
+import viewed.deepface : deepface, Face, calcDeepfaceCachePath, calcDeepfaceJsonPath;
 import imgui : Editor;
 import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
 import progressbar : withTextUi;
 import std.algorithm : sort, remove, find, filter, map, countUntil, joiner;
-import std.array : join, array;
+import std.array : join, array, replace;
 import std.conv : to;
 import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
 import std.exception : enforce;
@@ -15,7 +14,7 @@ import std.file : SpanMode;
 import std.format : format;
 import std.process : execute;
 import std.range : empty;
-import std.regex : replaceFirst, regex, matchFirst;
+import std.regex : replaceFirst, regex, matchFirst, ctRegex;
 import std.stdio : writeln;
 import thepath : Path;
 import viewed.expression : predicateForExpression;
@@ -29,6 +28,15 @@ else
 {
     import mir.deser.json : deserializeJson;
     import mir.ser.json : serializeJson;
+}
+
+
+Path shorten(Path file, Args args)
+{
+    enum firstSlash = ctRegex!("^/");
+    return Path(file.toString.replace(args.directory != Path.init
+            ? args.directory.toString() : "", "").replace(args.album != Path.init
+            ? args.album.parent.toString() : "", "").replaceFirst(firstSlash, ""));
 }
 
 class ImageFile

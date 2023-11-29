@@ -1,4 +1,4 @@
-module gamutextension;
+module viewed.gamutextension;
 
 import gamut : Image, PixelType;
 import imgui.colorscheme : RGBA;

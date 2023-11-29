@@ -10,11 +10,10 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
 import args : Args;
 import btl.vector : Vector;
 import core.time : Duration;
-import deepface : Face;
+import viewed.deepface : Face, deepface, finishDeepface;
 import gamut : Image;
-import gamutextension : drawRect;
+import viewed.gamutextension : drawRect;
 import gl3n.linalg : vec2, vec3;
-import imagedb : shorten;
 import imgui : Editor;
 import imgui.colorscheme : RGBA;
 import sg.visitors : RenderVisitor, BehaviorVisitor;
@@ -35,7 +34,7 @@ import std.range : chunks, take, empty;
 import std.stdio : writeln;
 import thepath : Path;
 import viewed.tags : identityTag;
-import imagefile : ImageFile, Metadata, Files, getFiles;
+import viewed.imagedb : ImageFile, Metadata, Files, getFiles, shorten;
 
 version (unittest)
 {
@@ -271,8 +270,6 @@ immutable struct FacesFound
 
 void runDeepface(immutable(ImageFile)[] files, Args args)
 {
-    import deepface : deepface, finishDeepface;
-
     try
     {
         import core.thread.osthread : Thread;

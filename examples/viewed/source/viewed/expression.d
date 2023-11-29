@@ -12,8 +12,9 @@ import std.math : sqrt;
 import std.range : ElementType, empty, front;
 import std.string : format;
 import std.variant : Variant, variantArray;
-import imagefile : ImageFile;
 import thepath : Path;
+import viewed.deepface : Face;
+import viewed.imagedb : ImageFile;
 
 version (unittest)
 {
@@ -339,8 +340,6 @@ auto predicateForExpression(string s)
 
     p = predicateForExpression("(hasFaces)");
     p.test(imageFile).should == false;
-
-    import deepface : Face;
 
     imageFile.faces = [Face()];
     p.test(imageFile).should == true;
