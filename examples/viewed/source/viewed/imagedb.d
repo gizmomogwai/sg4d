@@ -1,22 +1,22 @@
 module viewed.imagedb;
 
 import args : Args;
-import viewed.deepface : deepface, Face, calcDeepfaceCachePath, calcDeepfaceJsonPath;
 import imgui : Editor;
-import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
+import mir.serde : serdeIgnoreUnexpectedKeys, serdeKeys, serdeOptional;
 import progressbar : withTextUi;
-import std.algorithm : sort, remove, find, filter, map, countUntil, joiner;
-import std.array : join, array, replace;
+import std.algorithm : countUntil, filter, find, joiner, map, remove, sort;
+import std.array : array, join, replace;
 import std.conv : to;
-import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
+import std.datetime.stopwatch : AutoStart, msecs, StopWatch;
 import std.exception : enforce;
 import std.file : SpanMode;
 import std.format : format;
 import std.process : execute;
 import std.range : empty;
-import std.regex : replaceFirst, regex, matchFirst, ctRegex;
+import std.regex : ctRegex, matchFirst, regex, replaceFirst;
 import std.stdio : writeln;
 import thepath : Path;
+import viewed.deepface : calcDeepfaceCachePath, calcDeepfaceJsonPath, deepface, Face;
 import viewed.expression : predicateForExpression;
 import viewed.tags : identityTag, loadCache, storeCache;
 

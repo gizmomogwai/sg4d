@@ -1,19 +1,19 @@
 module viewed.deepface;
 
-import std.process : pipeShell, Redirect, ProcessPipes;
 import args : Args;
 import gamut : Image, ImageFormat, PixelType;
-import viewed.imagedb : shorten;
-import mir.serde : serdeIgnoreUnexpectedKeys, serdeOptional, serdeKeys;
-import std.algorithm : map, filter;
-import std.array : split, join, array;
+import mir.serde : serdeIgnoreUnexpectedKeys, serdeKeys, serdeOptional;
+import std.algorithm : filter, map;
+import std.array : array, join, split;
 import std.concurrency : initOnce;
 import std.conv : to;
-import std.file : mkdirRecurse, exists, readText, write;
-import std.regex : ctRegex, regex, matchAll;
+import std.file : exists, mkdirRecurse, readText, write;
+import std.process : pipeShell, ProcessPipes, Redirect;
+import std.regex : ctRegex, matchAll, regex;
 import std.stdio : File, writeln;
-import std.string : format, strip, toStringz, replace;
+import std.string : format, replace, strip, toStringz;
 import thepath : Path;
+import viewed.imagedb : shorten;
 
 version (unittest)
 {

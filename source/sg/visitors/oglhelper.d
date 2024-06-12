@@ -2,8 +2,8 @@ module sg.visitors.oglhelper;
 
 import bindbc.opengl : glGetError, GLenum, GL_NO_ERROR, GL_INVALID_ENUM,
     GL_INVALID_VALUE, GL_INVALID_OPERATION, GL_OUT_OF_MEMORY, glGetIntegerv;
-import std.string : format;
 import std.array : join;
+import std.string : format;
 
 void checkOglErrors()
 {

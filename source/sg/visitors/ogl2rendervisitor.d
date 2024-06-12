@@ -3,15 +3,15 @@ module sg.visitors.ogl2rendervisitor;
 version (Default)
 {
     import bindbc.opengl;
-    import sg.visitors.oglhelper;
-    import sg.visitors;
-    import sg.window;
+    import btl.autoptr.common;
+    import btl.autoptr.intrusive_ptr;
     import sg;
+    import sg.visitors;
+    import sg.visitors.oglhelper;
+    import sg.window;
     import std.concurrency;
     import std.exception;
     import std.stdio;
-    import btl.autoptr.common;
-    import btl.autoptr.intrusive_ptr;
     import gl3n.linalg;
 
     alias TextureName = IntrusivePtr!TextureNameData;

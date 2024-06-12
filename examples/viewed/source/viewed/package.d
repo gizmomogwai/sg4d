@@ -10,31 +10,31 @@ import sg : Texture, ParallelProjection, ShapeGroup, Geometry,
 import args : Args;
 import btl.vector : Vector;
 import core.time : Duration;
-import viewed.deepface : Face, deepface, finishDeepface;
 import gamut : Image;
+import viewed.deepface : deepface, Face, finishDeepface;
 import viewed.gamutextension : drawRect;
 import gl3n.linalg : vec2, vec3;
 import imgui : Editor;
 import imgui.colorscheme : RGBA;
-import sg.visitors : RenderVisitor, BehaviorVisitor;
+import sg.visitors : BehaviorVisitor, RenderVisitor;
 import sg.window : Window;
-import std.algorithm : min, max, map, countUntil, sort, reverse, filter, find, clamp, remove;
+import std.algorithm : clamp, countUntil, filter, find, map, max, min, remove, reverse, sort;
 import std.concurrency : Tid, send, ownerTid, spawn, thisTid, receiveTimeout,
     spawnLinked, LinkTerminated, OwnerTerminated;
-import std.datetime.stopwatch : StopWatch, AutoStart, msecs;
-import std.datetime.systime : SysTime, Clock;
-import std.conv : to;
 import std.array : array, join;
+import std.conv : to;
+import std.datetime.stopwatch : AutoStart, msecs, StopWatch;
+import std.datetime.systime : Clock, SysTime;
 import std.exception : enforce;
-import std.file : readText, write, exists, getSize;
+import std.file : exists, getSize, readText, write;
 import std.format : format;
 import std.math.traits : isNaN;
 import std.process : execute;
-import std.range : chunks, take, empty;
+import std.range : chunks, empty, take;
 import std.stdio : writeln;
 import thepath : Path;
+import viewed.imagedb : Files, getFiles, ImageFile, Metadata, shorten;
 import viewed.tags : identityTag;
-import viewed.imagedb : ImageFile, Metadata, Files, getFiles, shorten;
 
 version (unittest)
 {
@@ -50,9 +50,9 @@ auto getProjection(float zoom) => new ParallelProjection(1, 1000, zoom);
 
 string formatBigNumber(T)(const T number)
 {
+    import std.array : appender;
     import std.format.spec : singleSpec;
     import std.format.write : formatValue;
-    import std.array : appender;
 
     auto buffer = appender!string();
     static spec = "%,3d".singleSpec;
@@ -361,7 +361,12 @@ public void viewedMain(Args args)
     ];
     // dfmt on
 
-    auto deepface = spawnLinked(&runDeepface, cast(immutable) files.files, args);
+
+    Tid deepface;
+    if (args.deepface)
+    {
+        deepface = spawnLinked(&runDeepface, cast(immutable) files.files, args);
+    }
 
     auto scene = Scene.make("scene");
     auto projection = zoom.getProjection;
@@ -414,7 +419,7 @@ public void viewedMain(Args args)
     {
         class ImguiVisitor : Visitor
         {
-            import imgui : ImGui, MouseInfo, Enabled, Sizes, addGlobalAlpha, Sizes, ColumnLayout;
+            import imgui : addGlobalAlpha, ColumnLayout, Enabled, ImGui, MouseInfo, Sizes, Sizes;
             import imgui.renderer.opengl33 : Opengl33;
             import imgui.colorscheme : ColorScheme, defaultColorScheme;
 

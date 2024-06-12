@@ -1,6 +1,6 @@
 import core.thread;
-import sg.window;
 import sg;
+import sg.window;
 import std;
 
 import btl.autoptr.common;

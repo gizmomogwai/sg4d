@@ -19,8 +19,8 @@ version (Default)
     import bindbc.opengl : GL_EXTENSIONS;
 }
 
-import sg.visitors.oglhelper : glGetInt;
 import sg : Scene;
+import sg.visitors.oglhelper : glGetInt;
 import std.concurrency : thisTid;
 import std.conv : to;
 import std.exception : enforce;

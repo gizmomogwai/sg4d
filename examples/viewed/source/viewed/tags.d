@@ -1,13 +1,13 @@
 module viewed.tags;
 
-import std.algorithm : map, filter, joiner;
-import std.array : split, array, join;
+import std.algorithm : filter, joiner, map;
+import std.array : array, join, split;
 import std.conv : to;
 import std.format : format;
 import std.range : empty;
-import thepath : Path;
-import std.typecons : Tuple;
 import std.string : replace;
+import std.typecons : Tuple;
+import thepath : Path;
 
 version (unittest)
 {

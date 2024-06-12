@@ -7,9 +7,9 @@
  +/
 import autoptr.common;
 import autoptr.intrusive_ptr;
-import std.stdio;
 import containers.dynamicarray;
 import core.stdc.stdio;
+import std.stdio;
 
 class AData
 {

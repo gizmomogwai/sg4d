@@ -27,13 +27,13 @@ version (GL_33)
         ProjectionGroupData, ObserverData, TransformationGroupData,
         AppearanceData, TriangleArrayData, TextureData,
         IndexedInterleavedTriangleArrayData, ShapeGroupData, Behavior;
-    import std.stdio : writeln;
+    import btl.autoptr.intrusive_ptr : dynCast, IntrusivePtr;
     import sg.window : Window;
-    import std.concurrency : Tid, thisTid;
+    import std.concurrency : thisTid, Tid;
     import std.conv : to;
     import std.exception : enforce;
+    import std.stdio : writeln;
     import std.string : format, startsWith;
-    import btl.autoptr.intrusive_ptr : IntrusivePtr, dynCast;
     import gl3n.linalg : mat4, vec2, vec3, vec4;
     import gamut.types : PixelType;
 

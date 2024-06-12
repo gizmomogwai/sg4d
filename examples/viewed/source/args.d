@@ -1,6 +1,6 @@
 module args;
 
-import argparse : NamedArgument, Parse;
+import argparse : NamedArgument, Parse, Description, AllowedValues;
 import thepath : Path;
 
 public struct Args
@@ -13,4 +13,7 @@ public struct Args
 
     @(NamedArgument("album", "a").Parse!((string s) { return Path(s); }))
     Path album;
+
+    @(NamedArgument("deepface", "d").Description("Enable deepface"))
+    bool deepface = false;
 }
