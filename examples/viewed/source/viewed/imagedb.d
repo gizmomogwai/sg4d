@@ -30,7 +30,6 @@ else
     import mir.ser.json : serializeJson;
 }
 
-
 Path shorten(Path file, Args args)
 {
     enum firstSlash = ctRegex!("^/");

@@ -295,6 +295,7 @@ void runDeepface(immutable(ImageFile)[] files, Args args)
     }
     catch (OwnerTerminated t)
     {
+        writeln("done ", t);
     }
     finishDeepface(args);
 }
